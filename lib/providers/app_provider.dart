@@ -1,28 +1,27 @@
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../models/models.dart';
 
 class AppProvider extends ChangeNotifier {
-  Customer? _currentCustomer;
+  User? _currentUser;
   List<Location> _locations = [];
   List<Service> _services = [];
   List<Booking> _bookings = [];
   bool _isLoading = false;
 
-  Customer? get currentCustomer => _currentCustomer;
+  User? get currentUser => _currentUser;
   List<Location> get locations => _locations;
   List<Service> get services => _services;
   List<Booking> get bookings => _bookings;
   bool get isLoading => _isLoading;
-  bool get isLoggedIn => _currentCustomer != null;
+  bool get isLoggedIn => _currentUser != null;
 
   void setLoading(bool value) {
     _isLoading = value;
     notifyListeners();
   }
 
-  void setCustomer(Customer? customer) {
-    _currentCustomer = customer;
+  void setUser(User? user) {
+    _currentUser = user;
     notifyListeners();
   }
 
@@ -46,20 +45,8 @@ class AppProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> saveCustomerId(String id) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('customer_id', id);
-  }
-
-  Future<String?> getCustomerId() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('customer_id');
-  }
-
   Future<void> logout() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove('customer_id');
-    _currentCustomer = null;
+    _currentUser = null;
     _bookings = [];
     notifyListeners();
   }

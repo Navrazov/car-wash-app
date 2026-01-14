@@ -5,6 +5,7 @@ import '../theme/app_theme.dart';
 import '../providers/app_provider.dart';
 import '../services/api_service.dart';
 import '../models/models.dart';
+import 'login_screen.dart';
 
 class BookingScreen extends StatefulWidget {
   const BookingScreen({super.key});
@@ -19,11 +20,7 @@ class _BookingScreenState extends State<BookingScreen> {
   Service? _selectedService;
   DateTime _selectedDate = DateTime.now();
   String _selectedTime = '10:00';
-  
-  final _nameController = TextEditingController();
-  final _phoneController = TextEditingController();
-  final _carModelController = TextEditingController();
-  final _carNumberController = TextEditingController();
+  final _notesController = TextEditingController();
 
   final List<String> _timeSlots = [
     '09:00', '10:00', '11:00', '12:00', '13:00',
@@ -66,7 +63,7 @@ class _BookingScreenState extends State<BookingScreen> {
           _buildStepLine(1),
           _buildStepDot(2, 'Время'),
           _buildStepLine(2),
-          _buildStepDot(3, 'Данные'),
+          _buildStepDot(3, 'Подтверждение'),
         ],
       ),
     );
@@ -133,7 +130,7 @@ class _BookingScreenState extends State<BookingScreen> {
       case 2:
         return _buildTimeStep();
       case 3:
-        return _buildDataStep();
+        return _buildConfirmationStep(provider);
       default:
         return const SizedBox();
     }
@@ -393,53 +390,68 @@ class _BookingScreenState extends State<BookingScreen> {
     );
   }
 
-  Widget _buildDataStep() {
+  Widget _buildConfirmationStep(AppProvider provider) {
+    final user = provider.currentUser;
+    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Ваши данные',
+          'Подтверждение записи',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 16),
-        TextField(
-          controller: _nameController,
-          decoration: const InputDecoration(
-            labelText: 'Имя *',
-            prefixIcon: Icon(Icons.person_outline_rounded),
+        if (user != null) ...[
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.cardColor,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppTheme.borderColor),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Ваши данные',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.textSecondary),
+                ),
+                const SizedBox(height: 12),
+                _buildInfoRow(Icons.person_outline_rounded, 'Имя', user.name ?? 'Не указано'),
+                _buildInfoRow(Icons.phone_outlined, 'Телефон', user.phone),
+                if (user.carModel != null) _buildInfoRow(Icons.directions_car_outlined, 'Авто', user.carModel!),
+                if (user.carNumber != null) _buildInfoRow(Icons.pin_outlined, 'Номер', user.carNumber!),
+              ],
+            ),
           ),
-        ),
-        const SizedBox(height: 14),
+          const SizedBox(height: 16),
+        ],
         TextField(
-          controller: _phoneController,
-          keyboardType: TextInputType.phone,
+          controller: _notesController,
+          maxLines: 3,
           decoration: const InputDecoration(
-            labelText: 'Телефон *',
-            prefixIcon: Icon(Icons.phone_outlined),
-            hintText: '+7 (900) 123-45-67',
-          ),
-        ),
-        const SizedBox(height: 14),
-        TextField(
-          controller: _carModelController,
-          decoration: const InputDecoration(
-            labelText: 'Марка автомобиля',
-            prefixIcon: Icon(Icons.directions_car_outlined),
-          ),
-        ),
-        const SizedBox(height: 14),
-        TextField(
-          controller: _carNumberController,
-          textCapitalization: TextCapitalization.characters,
-          decoration: const InputDecoration(
-            labelText: 'Номер автомобиля',
-            prefixIcon: Icon(Icons.pin_outlined),
-            hintText: 'А001АА77',
+            labelText: 'Комментарий (необязательно)',
+            prefixIcon: Icon(Icons.note_outlined),
+            hintText: 'Дополнительные пожелания',
           ),
         ),
         const SizedBox(height: 24),
         _buildSummary(),
       ],
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppTheme.textSecondary),
+          const SizedBox(width: 8),
+          Text('$label: ', style: const TextStyle(color: AppTheme.textSecondary, fontSize: 14)),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+        ],
+      ),
     );
   }
 
@@ -533,7 +545,7 @@ class _BookingScreenState extends State<BookingScreen> {
       case 2:
         return true;
       case 3:
-        return _nameController.text.isNotEmpty && _phoneController.text.isNotEmpty;
+        return true;
       default:
         return false;
     }
@@ -548,35 +560,65 @@ class _BookingScreenState extends State<BookingScreen> {
   }
 
   Future<void> _submitBooking(AppProvider provider) async {
+    // Проверяем авторизацию
+    if (!provider.isLoggedIn) {
+      if (mounted) {
+        final result = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Требуется авторизация'),
+            content: const Text('Для создания записи необходимо войти в систему'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Отмена'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Войти'),
+              ),
+            ],
+          ),
+        );
+        
+        if (result == true) {
+          await Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+          );
+          // Проверяем снова после возврата
+          if (provider.isLoggedIn) {
+            await _submitBooking(provider);
+          }
+        }
+      }
+      return;
+    }
+
     final api = context.read<ApiService>();
+    provider.setLoading(true);
 
     try {
-      // Находим или создаем клиента
-      Customer? customer = await api.getCustomerByPhone(_phoneController.text);
-      
-      if (customer == null) {
-        customer = await api.createCustomer({
-          'name': _nameController.text,
-          'phone': _phoneController.text,
-          'car_model': _carModelController.text,
-          'car_number': _carNumberController.text,
-        });
-      }
-
       // Создаем бронирование
-      await api.createBooking({
-        'customer_id': customer.id,
-        'location_id': _selectedLocation!.id,
-        'service_id': _selectedService!.id,
-        'booking_date': DateFormat('yyyy-MM-dd').format(_selectedDate),
-        'booking_time': _selectedTime,
-        'total_price': _selectedService!.price,
+      final result = await api.createBooking({
+        'locationId': _selectedLocation!.id,
+        'serviceId': _selectedService!.id,
+        'bookingDate': DateFormat('yyyy-MM-dd').format(_selectedDate),
+        'bookingTime': _selectedTime,
+        'notes': _notesController.text.isNotEmpty ? _notesController.text : null,
       });
 
+      provider.setLoading(false);
+
       if (mounted) {
+        // Показываем диалог с предоплатой
+        final paymentUrl = result['paymentUrl'];
+        if (paymentUrl != null) {
+          await _showPaymentDialog(paymentUrl);
+        }
+        
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Запись успешно создана!'),
+            content: Text('Запись успешно создана! Необходимо внести предоплату.'),
             backgroundColor: AppTheme.successColor,
           ),
         );
@@ -588,13 +630,11 @@ class _BookingScreenState extends State<BookingScreen> {
           _selectedService = null;
           _selectedDate = DateTime.now();
           _selectedTime = '10:00';
-          _nameController.clear();
-          _phoneController.clear();
-          _carModelController.clear();
-          _carNumberController.clear();
+          _notesController.clear();
         });
       }
     } catch (e) {
+      provider.setLoading(false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -604,6 +644,36 @@ class _BookingScreenState extends State<BookingScreen> {
         );
       }
     }
+  }
+
+  Future<void> _showPaymentDialog(String paymentUrl) async {
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Предоплата'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Для подтверждения записи необходимо внести предоплату 100 ₽.'),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                // TODO: Открыть WebView с paymentUrl
+                Navigator.of(context).pop();
+              },
+              child: const Text('Перейти к оплате'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Позже'),
+          ),
+        ],
+      ),
+    );
   }
 }
 

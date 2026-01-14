@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../theme/app_theme.dart';
+import '../providers/app_provider.dart';
+import '../services/api_service.dart';
+import 'login_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -10,27 +14,40 @@ class ProfileScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Профиль'),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            _buildProfileHeader(),
-            const SizedBox(height: 24),
-            _buildMenuItem(Icons.person_outline_rounded, 'Личные данные'),
-            _buildMenuItem(Icons.directions_car_outlined, 'Мои автомобили'),
-            _buildMenuItem(Icons.notifications_outlined, 'Уведомления'),
-            _buildMenuItem(Icons.credit_card_outlined, 'Способы оплаты'),
-            _buildMenuItem(Icons.help_outline_rounded, 'Помощь'),
-            _buildMenuItem(Icons.info_outline_rounded, 'О приложении'),
-            const SizedBox(height: 20),
-            _buildLogoutButton(),
-          ],
-        ),
+      body: Consumer<AppProvider>(
+        builder: (context, provider, _) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              children: [
+                _buildProfileHeader(context, provider),
+                const SizedBox(height: 24),
+                if (provider.isLoggedIn) ...[
+                  _buildMenuItem(context, Icons.person_outline_rounded, 'Личные данные', () {
+                    _showEditProfileDialog(context);
+                  }),
+                  _buildMenuItem(context, Icons.directions_car_outlined, 'Мои автомобили', () {}),
+                  _buildStatsCard(provider),
+                  const SizedBox(height: 12),
+                ],
+                _buildMenuItem(context, Icons.help_outline_rounded, 'Помощь', () {}),
+                _buildMenuItem(context, Icons.info_outline_rounded, 'О приложении', () {}),
+                const SizedBox(height: 20),
+                if (provider.isLoggedIn)
+                  _buildLogoutButton(context, provider)
+                else
+                  _buildLoginButton(context),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
 
-  Widget _buildProfileHeader() {
+  Widget _buildProfileHeader(BuildContext context, AppProvider provider) {
+    final user = provider.currentUser;
+    
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -52,20 +69,88 @@ class ProfileScreen extends StatelessWidget {
             child: const Icon(Icons.person_rounded, size: 32, color: Colors.white),
           ),
           const SizedBox(width: 16),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Гость',
-                  style: TextStyle(
+                  user?.name ?? 'Гость',
+                  style: const TextStyle(
                     fontSize: 18,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
-                SizedBox(height: 4),
+                const SizedBox(height: 4),
                 Text(
-                  'Войдите, чтобы сохранять историю',
+                  user?.phone ?? 'Войдите, чтобы сохранять историю',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatsCard(AppProvider provider) {
+    final user = provider.currentUser;
+    if (user == null) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.cardColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.borderColor),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              children: [
+                Text(
+                  '${user.totalVisits}',
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.primaryColor,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Визитов',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Container(
+            width: 1,
+            height: 40,
+            color: AppTheme.borderColor,
+          ),
+          Expanded(
+            child: Column(
+              children: [
+                Text(
+                  '${user.totalSpent.toInt()} ₽',
+                  style: const TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.successColor,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                const Text(
+                  'Потрачено',
                   style: TextStyle(
                     fontSize: 13,
                     color: AppTheme.textSecondary,
@@ -79,7 +164,7 @@ class ProfileScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMenuItem(IconData icon, String title) {
+  Widget _buildMenuItem(BuildContext context, IconData icon, String title, VoidCallback onTap) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -111,12 +196,27 @@ class ProfileScreen extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
         ),
-        onTap: () {},
+        onTap: onTap,
       ),
     );
   }
 
-  Widget _buildLogoutButton() {
+  Widget _buildLoginButton(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton.icon(
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const LoginScreen()),
+          );
+        },
+        icon: const Icon(Icons.login_rounded),
+        label: const Text('Войти'),
+      ),
+    );
+  }
+
+  Widget _buildLogoutButton(BuildContext context, AppProvider provider) {
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.errorColor.withOpacity(0.1),
@@ -143,9 +243,136 @@ class ProfileScreen extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(14),
         ),
-        onTap: () {},
+        onTap: () async {
+          final confirmed = await showDialog<bool>(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text('Выход'),
+              content: const Text('Вы уверены, что хотите выйти?'),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(false),
+                  child: const Text('Отмена'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(true),
+                  child: const Text('Выйти', style: TextStyle(color: AppTheme.errorColor)),
+                ),
+              ],
+            ),
+          );
+
+          if (confirmed == true) {
+            final api = context.read<ApiService>();
+            await api.clearToken();
+            await provider.logout();
+          }
+        },
       ),
     );
+  }
+
+  Future<void> _showEditProfileDialog(BuildContext context) async {
+    final provider = context.read<AppProvider>();
+    final user = provider.currentUser;
+    if (user == null) return;
+
+    final nameController = TextEditingController(text: user.name);
+    final emailController = TextEditingController(text: user.email);
+    final carModelController = TextEditingController(text: user.carModel);
+    final carNumberController = TextEditingController(text: user.carNumber);
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Редактировать профиль'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Имя',
+                  prefixIcon: Icon(Icons.person_outline_rounded),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: emailController,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  prefixIcon: Icon(Icons.email_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: carModelController,
+                decoration: const InputDecoration(
+                  labelText: 'Марка автомобиля',
+                  prefixIcon: Icon(Icons.directions_car_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: carNumberController,
+                textCapitalization: TextCapitalization.characters,
+                decoration: const InputDecoration(
+                  labelText: 'Номер автомобиля',
+                  prefixIcon: Icon(Icons.pin_outlined),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () async {
+              try {
+                final api = context.read<ApiService>();
+                final updatedUser = await api.updateProfile({
+                  'name': nameController.text,
+                  'email': emailController.text.isNotEmpty ? emailController.text : null,
+                  'carModel': carModelController.text.isNotEmpty ? carModelController.text : null,
+                  'carNumber': carNumberController.text.isNotEmpty ? carNumberController.text : null,
+                });
+                provider.setUser(updatedUser);
+                
+                if (context.mounted) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Профиль обновлен'),
+                      backgroundColor: AppTheme.successColor,
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Ошибка: $e'),
+                      backgroundColor: AppTheme.errorColor,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+
+    nameController.dispose();
+    emailController.dispose();
+    carModelController.dispose();
+    carNumberController.dispose();
   }
 }
 
