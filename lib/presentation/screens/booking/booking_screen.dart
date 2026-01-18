@@ -6,6 +6,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/di/service_locator.dart';
 import '../../../domain/entities/entities.dart';
+import '../../../domain/repositories/box_repository.dart';
 import '../../providers/app_state.dart';
 import '../../widgets/common/app_card.dart';
 import '../../widgets/common/icon_box.dart';
@@ -24,10 +25,15 @@ class _BookingScreenState extends State<BookingScreen>
   int _currentStep = 0;
   Location? _selectedLocation;
   Service? _selectedService;
+  Box? _selectedBox;
   DateTime _selectedDate = DateTime.now();
   String _selectedTime = '10:00';
   final _notesController = TextEditingController();
   bool _isLoading = false;
+  List<Box> _availableBoxes = [];
+  List<BoxStatus> _boxStatuses = [];
+  bool _loadingBoxes = false;
+  Set<String> _occupiedTimeSlots = {};
 
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
@@ -164,7 +170,13 @@ class _BookingScreenState extends State<BookingScreen>
         return _LocationStep(
           locations: state.locations,
           selected: _selectedLocation,
-          onSelect: (l) => setState(() => _selectedLocation = l),
+          onSelect: (l) {
+            setState(() {
+              _selectedLocation = l;
+              _selectedBox = null; // Reset box when location changes
+            });
+            _loadBoxStatuses(l.id);
+          },
         );
       case 1:
         return _ServiceStep(
@@ -176,20 +188,129 @@ class _BookingScreenState extends State<BookingScreen>
         return _TimeStep(
           selectedDate: _selectedDate,
           selectedTime: _selectedTime,
-          onDateChanged: (d) => setState(() => _selectedDate = d),
+          occupiedTimeSlots: _occupiedTimeSlots,
+          onDateChanged: (d) {
+            setState(() {
+              _selectedDate = d;
+              _selectedTime = '10:00'; // Reset time when date changes
+            });
+            _loadOccupiedTimeSlots();
+          },
           onTimeChanged: (t) => setState(() => _selectedTime = t),
         );
       case 3:
+        return _BoxStep(
+          availableBoxes: _availableBoxes,
+          boxStatuses: _boxStatuses,
+          selectedBox: _selectedBox,
+          selectedTime: _selectedTime,
+          serviceDuration: _selectedService?.duration ?? 60,
+          isLoading: _loadingBoxes,
+          onSelect: (box) => setState(() => _selectedBox = box),
+          onRefresh: () => _loadAvailableBoxes(),
+        );
+      case 4:
         return _ConfirmationStep(
           user: state.currentUser,
           location: _selectedLocation,
           service: _selectedService,
+          box: _selectedBox,
           date: _selectedDate,
           time: _selectedTime,
           notesController: _notesController,
         );
       default:
         return const SizedBox();
+    }
+  }
+
+  Future<void> _loadBoxStatuses(String locationId) async {
+    setState(() => _loadingBoxes = true);
+    try {
+      final statuses = await sl.boxRepository.getBoxesStatus(
+        locationId,
+        date: _selectedDate,
+      );
+      if (mounted) {
+        setState(() {
+          _boxStatuses = statuses;
+          _loadingBoxes = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingBoxes = false);
+      }
+    }
+  }
+
+  Future<void> _loadAvailableBoxes() async {
+    if (_selectedLocation == null || _selectedService == null) return;
+    
+    setState(() => _loadingBoxes = true);
+    try {
+      final boxes = await sl.boxRepository.getAvailableBoxes(
+        _selectedLocation!.id,
+        _selectedDate,
+        _selectedTime,
+        _selectedService!.duration,
+      );
+      
+      // Also load all box statuses to show which are busy
+      final statuses = await sl.boxRepository.getBoxesStatus(
+        _selectedLocation!.id,
+        date: _selectedDate,
+      );
+      
+      if (mounted) {
+        setState(() {
+          _availableBoxes = boxes;
+          _boxStatuses = statuses;
+          _loadingBoxes = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingBoxes = false);
+      }
+    }
+  }
+
+  Future<void> _loadOccupiedTimeSlots() async {
+    if (_selectedLocation == null || _selectedService == null) return;
+    
+    try {
+      final statuses = await sl.boxRepository.getBoxesStatus(
+        _selectedLocation!.id,
+        date: _selectedDate,
+      );
+      
+      // Find time slots where ALL boxes are occupied
+      final allTimeSlots = AppConstants.timeSlots;
+      final occupiedSlots = <String>{};
+      
+      for (final time in allTimeSlots) {
+        // Check if any box is available at this time
+        final boxes = await sl.boxRepository.getAvailableBoxes(
+          _selectedLocation!.id,
+          _selectedDate,
+          time,
+          _selectedService!.duration,
+        );
+        
+        if (boxes.isEmpty) {
+          occupiedSlots.add(time);
+        }
+      }
+      
+      if (mounted) {
+        setState(() {
+          _occupiedTimeSlots = occupiedSlots;
+          _boxStatuses = statuses;
+        });
+      }
+    } catch (e) {
+      // Ignore errors
     }
   }
 
@@ -200,15 +321,26 @@ class _BookingScreenState extends State<BookingScreen>
       case 1:
         return _selectedService != null;
       case 2:
+        return true; // Time step
       case 3:
-        return true;
+        return _selectedBox != null; // Box step
+      case 4:
+        return true; // Confirmation
       default:
         return false;
     }
   }
 
   Future<void> _handleNext(AppState state) async {
-    if (_currentStep < 3) {
+    if (_currentStep < 4) {
+      // After selecting service, load occupied time slots
+      if (_currentStep == 1 && _selectedLocation != null && _selectedService != null) {
+        _loadOccupiedTimeSlots();
+      }
+      // Load available boxes when moving to box selection step
+      if (_currentStep == 2 && _selectedLocation != null && _selectedService != null) {
+        await _loadAvailableBoxes();
+      }
       setState(() => _currentStep++);
       _animController.reset();
       _animController.forward();
@@ -245,6 +377,7 @@ class _BookingScreenState extends State<BookingScreen>
     try {
       await sl.bookingRepository.createBooking({
         'locationId': _selectedLocation!.id,
+        'boxId': _selectedBox!.id,
         'serviceId': _selectedService!.id,
         'bookingDate': DateFormat('yyyy-MM-dd').format(_selectedDate),
         'bookingTime': _selectedTime,
@@ -416,10 +549,14 @@ class _BookingScreenState extends State<BookingScreen>
                     _currentStep = 0;
                     _selectedLocation = null;
                     _selectedService = null;
+                    _selectedBox = null;
                     _selectedDate = DateTime.now();
                     _selectedTime = '10:00';
                     _notesController.clear();
                     _isLoading = false;
+                    _availableBoxes = [];
+                    _boxStatuses = [];
+                    _occupiedTimeSlots = {};
                   });
                 },
                 style: ElevatedButton.styleFrom(
@@ -444,7 +581,7 @@ class _StepIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
       child: Row(
         children: [
           _StepDot(step: 0, currentStep: currentStep, label: 'Филиал'),
@@ -453,7 +590,9 @@ class _StepIndicator extends StatelessWidget {
           _StepLine(isActive: currentStep > 1),
           _StepDot(step: 2, currentStep: currentStep, label: 'Время'),
           _StepLine(isActive: currentStep > 2),
-          _StepDot(step: 3, currentStep: currentStep, label: 'Готово'),
+          _StepDot(step: 3, currentStep: currentStep, label: 'Бокс'),
+          _StepLine(isActive: currentStep > 3),
+          _StepDot(step: 4, currentStep: currentStep, label: 'Готово'),
         ],
       ),
     );
@@ -839,12 +978,14 @@ class _ServiceOption extends StatelessWidget {
 class _TimeStep extends StatelessWidget {
   final DateTime selectedDate;
   final String selectedTime;
+  final Set<String> occupiedTimeSlots;
   final ValueChanged<DateTime> onDateChanged;
   final ValueChanged<String> onTimeChanged;
 
   const _TimeStep({
     required this.selectedDate,
     required this.selectedTime,
+    required this.occupiedTimeSlots,
     required this.onDateChanged,
     required this.onTimeChanged,
   });
@@ -872,17 +1013,40 @@ class _TimeStep extends StatelessWidget {
           onChanged: onDateChanged,
         ),
         const SizedBox(height: 24),
-        Text(
-          'Доступное время',
-          style: TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: AppColors.textSecondary.withOpacity(0.9),
-          ),
+        Row(
+          children: [
+            Text(
+              'Доступное время',
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary.withOpacity(0.9),
+              ),
+            ),
+            if (occupiedTimeSlots.isNotEmpty) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.error.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Красные - заняты',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppColors.error.withOpacity(0.9),
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
         const SizedBox(height: 14),
         _TimeSlots(
           selectedTime: selectedTime,
+          occupiedTimeSlots: occupiedTimeSlots,
           onChanged: onTimeChanged,
         ),
       ],
@@ -968,10 +1132,12 @@ class _DatePicker extends StatelessWidget {
 
 class _TimeSlots extends StatelessWidget {
   final String selectedTime;
+  final Set<String> occupiedTimeSlots;
   final ValueChanged<String> onChanged;
 
   const _TimeSlots({
     required this.selectedTime,
+    required this.occupiedTimeSlots,
     required this.onChanged,
   });
 
@@ -982,23 +1148,33 @@ class _TimeSlots extends StatelessWidget {
       runSpacing: 12,
       children: AppConstants.timeSlots.map((time) {
         final isSelected = selectedTime == time;
+        final isOccupied = occupiedTimeSlots.contains(time);
+        
         return GestureDetector(
-          onTap: () => onChanged(time),
+          onTap: isOccupied ? null : () => onChanged(time),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 200),
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
             decoration: BoxDecoration(
-              gradient: isSelected
+              gradient: isSelected && !isOccupied
                   ? const LinearGradient(
                       colors: [Color(0xFF00E5FF), Color(0xFF0099CC)],
                     )
                   : null,
-              color: isSelected ? null : AppColors.card,
+              color: isOccupied 
+                  ? AppColors.error.withOpacity(0.15)
+                  : isSelected 
+                      ? null 
+                      : AppColors.card,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isSelected ? AppColors.primary : AppColors.border,
+                color: isOccupied
+                    ? AppColors.error.withOpacity(0.3)
+                    : isSelected
+                        ? AppColors.primary
+                        : AppColors.border,
               ),
-              boxShadow: isSelected
+              boxShadow: isSelected && !isOccupied
                   ? [
                       BoxShadow(
                         color: AppColors.primary.withOpacity(0.3),
@@ -1008,13 +1184,31 @@ class _TimeSlots extends StatelessWidget {
                     ]
                   : null,
             ),
-            child: Text(
-              time,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: isSelected ? Colors.white : AppColors.textPrimary,
-              ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isOccupied) ...[
+                  Icon(
+                    Icons.block_rounded,
+                    size: 14,
+                    color: AppColors.error.withOpacity(0.7),
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                Text(
+                  time,
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: isOccupied
+                        ? AppColors.error.withOpacity(0.7)
+                        : isSelected
+                            ? Colors.white
+                            : AppColors.textPrimary,
+                    decoration: isOccupied ? TextDecoration.lineThrough : null,
+                  ),
+                ),
+              ],
             ),
           ),
         );
@@ -1023,10 +1217,299 @@ class _TimeSlots extends StatelessWidget {
   }
 }
 
+class _BoxStep extends StatelessWidget {
+  final List<Box> availableBoxes;
+  final List<BoxStatus> boxStatuses;
+  final Box? selectedBox;
+  final String selectedTime;
+  final int serviceDuration;
+  final bool isLoading;
+  final ValueChanged<Box> onSelect;
+  final VoidCallback onRefresh;
+
+  const _BoxStep({
+    required this.availableBoxes,
+    required this.boxStatuses,
+    this.selectedBox,
+    required this.selectedTime,
+    required this.serviceDuration,
+    required this.isLoading,
+    required this.onSelect,
+    required this.onRefresh,
+  });
+
+  String _calculateEndTime(String startTime, int durationMinutes) {
+    final parts = startTime.split(':');
+    final hours = int.parse(parts[0]);
+    final minutes = int.parse(parts[1]);
+    final totalMinutes = hours * 60 + minutes + durationMinutes;
+    final endHours = (totalMinutes ~/ 60) % 24;
+    final endMinutes = totalMinutes % 60;
+    return '${endHours.toString().padLeft(2, '0')}:${endMinutes.toString().padLeft(2, '0')}';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final endTime = _calculateEndTime(selectedTime, serviceDuration);
+    final availableIds = availableBoxes.map((b) => b.id).toSet();
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Выберите бокс',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Время: $selectedTime - $endTime',
+                    style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+            IconButton(
+              onPressed: onRefresh,
+              icon: Icon(
+                Icons.refresh_rounded,
+                color: AppColors.textSecondary.withOpacity(0.7),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: AppColors.surface.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: AppColors.success,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Свободен',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary.withOpacity(0.9),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Container(
+                width: 12,
+                height: 12,
+                decoration: BoxDecoration(
+                  color: AppColors.error,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Занят',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary.withOpacity(0.9),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 20),
+        if (isLoading)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(32),
+              child: LoadingIndicator(),
+            ),
+          )
+        else if (boxStatuses.isEmpty)
+          Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.inbox_rounded,
+                    size: 48,
+                    color: AppColors.textSecondary.withOpacity(0.5),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Нет боксов на этой локации',
+                    style: TextStyle(
+                      color: AppColors.textSecondary.withOpacity(0.8),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 2,
+              mainAxisSpacing: 14,
+              crossAxisSpacing: 14,
+              childAspectRatio: 1.0,
+            ),
+            itemCount: boxStatuses.length,
+            itemBuilder: (context, index) {
+              final status = boxStatuses[index];
+              final isSelected = selectedBox?.id == status.boxId;
+              final isAvailable = availableIds.contains(status.boxId);
+
+              return GestureDetector(
+                onTap: isAvailable
+                    ? () => onSelect(Box(
+                          id: status.boxId,
+                          locationId: '',
+                          name: status.name,
+                          number: status.number,
+                        ))
+                    : null,
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 200),
+                  decoration: BoxDecoration(
+                    gradient: isSelected
+                        ? const LinearGradient(
+                            colors: [Color(0xFF00E5FF), Color(0xFF0099CC)],
+                          )
+                        : null,
+                    color: isSelected
+                        ? null
+                        : isAvailable
+                            ? AppColors.card
+                            : AppColors.error.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: isSelected
+                          ? AppColors.primary
+                          : isAvailable
+                              ? AppColors.success.withOpacity(0.5)
+                              : AppColors.error.withOpacity(0.3),
+                      width: isSelected ? 2 : 1.5,
+                    ),
+                    boxShadow: isSelected
+                        ? [
+                            BoxShadow(
+                              color: AppColors.primary.withOpacity(0.3),
+                              blurRadius: 15,
+                              spreadRadius: 0,
+                            ),
+                          ]
+                        : null,
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? Colors.white.withOpacity(0.2)
+                              : isAvailable
+                                  ? AppColors.success.withOpacity(0.15)
+                                  : AppColors.error.withOpacity(0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          isAvailable
+                              ? Icons.check_circle_rounded
+                              : Icons.block_rounded,
+                          size: 28,
+                          color: isSelected
+                              ? Colors.white
+                              : isAvailable
+                                  ? AppColors.success
+                                  : AppColors.error,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        status.name,
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                          color: isSelected
+                              ? Colors.white
+                              : AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        isAvailable ? 'Свободен' : 'Занят',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: isSelected
+                              ? Colors.white.withOpacity(0.8)
+                              : isAvailable
+                                  ? AppColors.success
+                                  : AppColors.error,
+                        ),
+                      ),
+                      if (!isAvailable) ...[
+                        const SizedBox(height: 4),
+                        if (status.isOccupied && status.currentBooking != null)
+                          Text(
+                            'занят до ${status.currentBooking!.endTime}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.error.withOpacity(0.8),
+                            ),
+                            textAlign: TextAlign.center,
+                          )
+                        else if (status.nextBooking != null)
+                          Text(
+                            'запись в ${status.nextBooking!.startTime}',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.error.withOpacity(0.8),
+                            ),
+                            textAlign: TextAlign.center,
+                          )
+                        else
+                          Text(
+                            'недоступен',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.error.withOpacity(0.8),
+                            ),
+                          ),
+                      ],
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+      ],
+    );
+  }
+}
+
 class _ConfirmationStep extends StatelessWidget {
   final dynamic user;
   final Location? location;
   final Service? service;
+  final Box? box;
   final DateTime date;
   final String time;
   final TextEditingController notesController;
@@ -1035,6 +1518,7 @@ class _ConfirmationStep extends StatelessWidget {
     this.user,
     this.location,
     this.service,
+    this.box,
     required this.date,
     required this.time,
     required this.notesController,
@@ -1061,6 +1545,7 @@ class _ConfirmationStep extends StatelessWidget {
         _Summary(
           location: location,
           service: service,
+          box: box,
           date: date,
           time: time,
         ),
@@ -1088,12 +1573,14 @@ class _ConfirmationStep extends StatelessWidget {
 class _Summary extends StatelessWidget {
   final Location? location;
   final Service? service;
+  final Box? box;
   final DateTime date;
   final String time;
 
   const _Summary({
     this.location,
     this.service,
+    this.box,
     required this.date,
     required this.time,
   });
@@ -1125,6 +1612,11 @@ class _Summary extends StatelessWidget {
             icon: Icons.car_repair_rounded,
             label: 'Услуга',
             value: service?.name ?? '—',
+          ),
+          _SummaryRow(
+            icon: Icons.garage_rounded,
+            label: 'Бокс',
+            value: box?.name ?? '—',
           ),
           _SummaryRow(
             icon: Icons.calendar_month_rounded,
@@ -1290,10 +1782,10 @@ class _BottomButtons extends StatelessWidget {
                       : Row(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(currentStep == 3 ? 'Записаться' : 'Далее'),
+                            Text(currentStep == 4 ? 'Записаться' : 'Далее'),
                             const SizedBox(width: 8),
                             Icon(
-                              currentStep == 3
+                              currentStep == 4
                                   ? Icons.check_circle_rounded
                                   : Icons.arrow_forward_rounded,
                               size: 20,
