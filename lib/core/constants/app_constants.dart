@@ -2,7 +2,8 @@ class AppConstants {
   AppConstants._();
 
   // API
-  static const String apiBaseUrl = 'http://192.168.31.26:3001/api';
+  // Используй localhost для web, IP для реального устройства
+  static const String apiBaseUrl = 'http://localhost:3001/api';
   
   // Storage keys
   static const String accessTokenKey = 'accessToken';

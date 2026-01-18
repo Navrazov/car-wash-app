@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../core/di/service_locator.dart';
 import '../../domain/entities/entities.dart';
-import '../../data/repositories/repositories.dart';
 
 class AppState extends ChangeNotifier {
   User? _currentUser;
@@ -8,18 +8,15 @@ class AppState extends ChangeNotifier {
   List<Service> _services = [];
   List<Booking> _bookings = [];
   bool _isLoading = false;
+  String? _error;
 
   User? get currentUser => _currentUser;
   List<Location> get locations => _locations;
   List<Service> get services => _services;
   List<Booking> get bookings => _bookings;
   bool get isLoading => _isLoading;
+  String? get error => _error;
   bool get isLoggedIn => _currentUser != null;
-
-  final AuthRepositoryImpl _authRepository = AuthRepositoryImpl();
-  final LocationRepositoryImpl _locationRepository = LocationRepositoryImpl();
-  final ServiceRepositoryImpl _serviceRepository = ServiceRepositoryImpl();
-  final BookingRepositoryImpl _bookingRepository = BookingRepositoryImpl();
 
   void setLoading(bool value) {
     _isLoading = value;
@@ -28,14 +25,31 @@ class AppState extends ChangeNotifier {
 
   void setUser(User? user) {
     _currentUser = user;
+    _error = null;
+    notifyListeners();
+  }
+
+  void setError(String? error) {
+    _error = error;
+    notifyListeners();
+  }
+
+  void clearError() {
+    _error = null;
     notifyListeners();
   }
 
   Future<void> loadInitialData() async {
+    if (_isLoading) return;
+    
     try {
+      _isLoading = true;
+      _error = null;
+      notifyListeners();
+
       final results = await Future.wait([
-        _locationRepository.getLocations(),
-        _serviceRepository.getServices(),
+        sl.locationRepository.getLocations(),
+        sl.serviceRepository.getServices(),
       ]);
 
       _locations = (results[0] as List<Location>)
@@ -44,17 +58,22 @@ class AppState extends ChangeNotifier {
       _services = (results[1] as List<Service>)
           .where((s) => s.isActive)
           .toList();
+      
+      _isLoading = false;
       notifyListeners();
     } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
       debugPrint('Error loading initial data: $e');
+      notifyListeners();
     }
   }
 
   Future<void> loadBookings() async {
     if (!isLoggedIn) return;
-    
+
     try {
-      _bookings = await _bookingRepository.getBookings();
+      _bookings = await sl.bookingRepository.getBookings();
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading bookings: $e');
@@ -66,11 +85,23 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> refreshProfile() async {
+    if (!isLoggedIn) return;
+
+    try {
+      final user = await sl.authRepository.getProfile();
+      _currentUser = user;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error refreshing profile: $e');
+    }
+  }
+
   Future<void> logout() async {
-    await _authRepository.logout();
+    await sl.authRepository.logout();
     _currentUser = null;
     _bookings = [];
+    sl.reset();
     notifyListeners();
   }
 }
-
