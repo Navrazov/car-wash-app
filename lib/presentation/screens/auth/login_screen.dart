@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'dart:async';
-import '../theme/app_theme.dart';
-import '../services/api_service.dart';
-import '../providers/app_provider.dart';
+import '../../../core/theme/app_colors.dart';
+import '../../../data/repositories/auth_repository_impl.dart';
+import '../../providers/app_state.dart';
+import '../../widgets/common/loading_indicator.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,6 +16,8 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _phoneController = TextEditingController();
   final _codeController = TextEditingController();
+  final _authRepository = AuthRepositoryImpl();
+  
   bool _isCodeSent = false;
   bool _isLoading = false;
   int _countdown = 60;
@@ -50,30 +53,23 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    if (!mounted) return;
     setState(() => _isLoading = true);
-    final api = context.read<ApiService>();
 
     try {
-      await api.sendVerificationCode(_phoneController.text);
+      await _authRepository.sendVerificationCode(_phoneController.text);
       if (mounted) {
         setState(() {
           _isCodeSent = true;
           _isLoading = false;
         });
         _startCountdown();
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Код отправлен на ваш номер'),
-            backgroundColor: AppTheme.successColor,
-          ),
-        );
+        _showSuccess('Код отправлен на ваш номер');
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
+        _showError(e.toString());
       }
-      _showError(e.toString());
     }
   }
 
@@ -83,49 +79,49 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    if (!mounted) return;
     setState(() => _isLoading = true);
-    final api = context.read<ApiService>();
-    final provider = context.read<AppProvider>();
 
     try {
-      final user = await api.verifyCode(_phoneController.text, _codeController.text);
-      provider.setUser(user);
+      final user = await _authRepository.verifyCode(
+        _phoneController.text,
+        _codeController.text,
+      );
       
       if (mounted) {
-        Navigator.of(context).pop(); // Возвращаемся на предыдущий экран
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Вы успешно авторизованы!'),
-            backgroundColor: AppTheme.successColor,
-          ),
-        );
+        context.read<AppState>().setUser(user);
+        Navigator.of(context).pop();
+        _showSuccess('Вы успешно авторизованы!');
       }
     } catch (e) {
       if (mounted) {
         setState(() => _isLoading = false);
+        _showError(e.toString());
       }
-      _showError(e.toString());
     }
   }
 
   void _showError(String message) {
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: AppTheme.errorColor,
-        ),
-      );
-    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.error,
+      ),
+    );
+  }
+
+  void _showSuccess(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: AppColors.success,
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Вход'),
-      ),
+      appBar: AppBar(title: const Text('Вход')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -151,12 +147,14 @@ class _LoginScreenState extends State<LoginScreen> {
         width: 80,
         height: 80,
         decoration: BoxDecoration(
-          gradient: const LinearGradient(
-            colors: [AppTheme.primaryColor, AppTheme.primaryDark],
-          ),
+          gradient: AppColors.primaryGradient,
           borderRadius: BorderRadius.circular(20),
         ),
-        child: const Icon(Icons.local_car_wash_rounded, color: Colors.white, size: 40),
+        child: const Icon(
+          Icons.local_car_wash_rounded,
+          color: Colors.white,
+          size: 40,
+        ),
       ),
     );
   }
@@ -179,7 +177,7 @@ class _LoginScreenState extends State<LoginScreen> {
               : 'Введите номер телефона для входа\nили регистрации',
           style: const TextStyle(
             fontSize: 14,
-            color: AppTheme.textSecondary,
+            color: AppColors.textSecondary,
           ),
           textAlign: TextAlign.center,
         ),
@@ -205,14 +203,7 @@ class _LoginScreenState extends State<LoginScreen> {
           child: ElevatedButton(
             onPressed: _isLoading ? null : _sendCode,
             child: _isLoading
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
+                ? const LoadingIndicator()
                 : const Text('Получить код'),
           ),
         ),
@@ -230,7 +221,7 @@ class _LoginScreenState extends State<LoginScreen> {
           decoration: const InputDecoration(
             labelText: 'Код подтверждения',
             prefixIcon: Icon(Icons.lock_outline_rounded),
-            hintText: '123456',
+            hintText: '1234',
           ),
         ),
         const SizedBox(height: 24),
@@ -239,14 +230,7 @@ class _LoginScreenState extends State<LoginScreen> {
           child: ElevatedButton(
             onPressed: _isLoading ? null : _verifyCode,
             child: _isLoading
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      color: Colors.white,
-                    ),
-                  )
+                ? const LoadingIndicator()
                 : const Text('Войти'),
           ),
         ),
@@ -256,18 +240,16 @@ class _LoginScreenState extends State<LoginScreen> {
             'Отправить код повторно через $_countdown сек',
             style: const TextStyle(
               fontSize: 14,
-              color: AppTheme.textSecondary,
+              color: AppColors.textSecondary,
             ),
           )
         else
           TextButton(
             onPressed: () {
-              if (mounted) {
-                setState(() {
-                  _isCodeSent = false;
-                  _codeController.clear();
-                });
-              }
+              setState(() {
+                _isCodeSent = false;
+                _codeController.clear();
+              });
             },
             child: const Text('Отправить код повторно'),
           ),
@@ -275,3 +257,4 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 }
+
