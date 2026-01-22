@@ -6,3 +6,4 @@ abstract class BoxRepository {
   Future<List<Box>> getAvailableBoxes(String locationId, DateTime date, String time, int duration);
 }
 
+

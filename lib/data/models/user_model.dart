@@ -10,6 +10,7 @@ class UserModel extends User {
     super.carNumber,
     super.totalVisits,
     super.totalSpent,
+    super.rating,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -22,6 +23,7 @@ class UserModel extends User {
       carNumber: json['carNumber'],
       totalVisits: json['totalVisits'] ?? 0,
       totalSpent: (json['totalSpent'] as num?)?.toDouble() ?? 0,
+      rating: json['rating'] ?? 100,
     );
   }
 

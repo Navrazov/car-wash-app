@@ -7,6 +7,7 @@ class User {
   final String? carNumber;
   final int totalVisits;
   final double totalSpent;
+  final int rating;
 
   const User({
     required this.id,
@@ -17,6 +18,7 @@ class User {
     this.carNumber,
     this.totalVisits = 0,
     this.totalSpent = 0,
+    this.rating = 100,
   });
 
   User copyWith({
@@ -28,6 +30,7 @@ class User {
     String? carNumber,
     int? totalVisits,
     double? totalSpent,
+    int? rating,
   }) {
     return User(
       id: id ?? this.id,
@@ -38,6 +41,7 @@ class User {
       carNumber: carNumber ?? this.carNumber,
       totalVisits: totalVisits ?? this.totalVisits,
       totalSpent: totalSpent ?? this.totalSpent,
+      rating: rating ?? this.rating,
     );
   }
 }

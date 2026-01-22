@@ -42,6 +42,7 @@ class ProfileScreen extends StatelessWidget {
                   _StatsCard(
                     visits: state.currentUser?.totalVisits ?? 0,
                     spent: state.currentUser?.totalSpent ?? 0,
+                    rating: state.currentUser?.rating ?? 100,
                   ),
                   const SizedBox(height: 16),
                   _MenuItem(
@@ -405,8 +406,9 @@ class _ProfileHeader extends StatelessWidget {
 class _StatsCard extends StatelessWidget {
   final int visits;
   final double spent;
+  final int rating;
 
-  const _StatsCard({required this.visits, required this.spent});
+  const _StatsCard({required this.visits, required this.spent, required this.rating});
 
   @override
   Widget build(BuildContext context) {
@@ -417,41 +419,62 @@ class _StatsCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: AppColors.border),
       ),
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: _StatItem(
-              value: visits.toString(),
-              label: 'Визитов',
-              color: AppColors.primary,
-              icon: Icons.local_car_wash_rounded,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: _StatItem(
+                  value: visits.toString(),
+                  label: 'Визитов',
+                  color: AppColors.primary,
+                  icon: Icons.local_car_wash_rounded,
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 50,
+                color: AppColors.border,
+              ),
+              Expanded(
+                child: _StatItem(
+                  value: '${spent.toInt()} ₽',
+                  label: 'Потрачено',
+                  color: AppColors.success,
+                  icon: Icons.payments_rounded,
+                ),
+              ),
+            ],
           ),
           Container(
-            width: 1,
-            height: 50,
+            height: 1,
             color: AppColors.border,
+            margin: const EdgeInsets.symmetric(vertical: 16),
           ),
-          Expanded(
-            child: _StatItem(
-              value: '${spent.toInt()} ₽',
-              label: 'Потрачено',
-              color: AppColors.success,
-              icon: Icons.payments_rounded,
-            ),
-          ),
-          Container(
-            width: 1,
-            height: 50,
-            color: AppColors.border,
-          ),
-          Expanded(
-            child: _StatItem(
-              value: '${(spent * 0.05).toInt()}',
-              label: 'Бонусов',
-              color: AppColors.purple,
-              icon: Icons.star_rounded,
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: _StatItem(
+                  value: '${(spent * 0.05).toInt()}',
+                  label: 'Бонусов',
+                  color: AppColors.purple,
+                  icon: Icons.star_rounded,
+                ),
+              ),
+              Container(
+                width: 1,
+                height: 50,
+                color: AppColors.border,
+              ),
+              Expanded(
+                child: _StatItem(
+                  value: '$rating%',
+                  label: 'Рейтинг',
+                  color: AppColors.warning,
+                  icon: Icons.grade_rounded,
+                ),
+              ),
+            ],
           ),
         ],
       ),
