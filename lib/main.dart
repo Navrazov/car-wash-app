@@ -13,6 +13,7 @@ import 'presentation/screens/home/home_screen.dart';
 import 'presentation/screens/booking/booking_screen.dart';
 import 'presentation/screens/history/history_screen.dart';
 import 'presentation/screens/profile/profile_screen.dart';
+import 'presentation/screens/locations/locations_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -85,6 +86,7 @@ class _MainScreenState extends State<MainScreen>
       HomeScreen(),
       BookingScreen(),
       HistoryScreen(),
+      LocationsScreen(),
       ProfileScreen(),
     ];
 
@@ -180,9 +182,16 @@ class _BottomNavBar extends StatelessWidget {
               ),
               _NavItem(
                 index: 3,
+                icon: Icons.location_on_rounded,
+                label: 'Филиалы',
+                isActive: currentIndex == 3,
+                onTap: onTap,
+              ),
+              _NavItem(
+                index: 4,
                 icon: Icons.person_rounded,
                 label: 'Профиль',
-                isActive: currentIndex == 3,
+                isActive: currentIndex == 4,
                 onTap: onTap,
               ),
             ],

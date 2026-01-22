@@ -5,7 +5,6 @@ import '../../providers/app_state.dart';
 import '../../widgets/home/app_header.dart';
 import '../../widgets/home/promo_card.dart';
 import '../../widgets/home/service_category_card.dart';
-import '../../widgets/home/location_card.dart';
 import '../../widgets/common/section_title.dart';
 import '../../widgets/common/loading_indicator.dart';
 
@@ -90,13 +89,6 @@ class _HomeScreenState extends State<HomeScreen>
                     ),
                     const SizedBox(height: 16),
                     _buildServicesGrid(),
-                    const SizedBox(height: 32),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20),
-                      child: _buildSectionHeader('Филиалы', Icons.location_on_rounded),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildLocationsList(),
                     const SizedBox(height: 32),
                   ],
                 ),
@@ -236,29 +228,6 @@ class _HomeScreenState extends State<HomeScreen>
     );
   }
 
-  Widget _buildLocationsList() {
-    return Consumer<AppState>(
-      builder: (context, state, _) {
-        if (state.locations.isEmpty) {
-          return const Center(
-            child: Padding(
-              padding: EdgeInsets.all(40),
-              child: LoadingIndicator(size: 36),
-            ),
-          );
-        }
-
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Column(
-            children: state.locations
-                .map((location) => LocationCard(location: location))
-                .toList(),
-          ),
-        );
-      },
-    );
-  }
 }
 
 class _QuickActionChip extends StatelessWidget {
