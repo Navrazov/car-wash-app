@@ -9,6 +9,8 @@ class LocationModel extends Location {
     super.workingHours,
     super.description,
     super.isActive,
+    super.latitude,
+    super.longitude,
   });
 
   factory LocationModel.fromJson(Map<String, dynamic> json) {
@@ -20,6 +22,8 @@ class LocationModel extends Location {
       workingHours: json['workingHours'],
       description: json['description'],
       isActive: json['isActive'] ?? true,
+      latitude: json['latitude'] != null ? double.tryParse(json['latitude'].toString()) : null,
+      longitude: json['longitude'] != null ? double.tryParse(json['longitude'].toString()) : null,
     );
   }
 }

@@ -6,6 +6,8 @@ class Location {
   final String? workingHours;
   final String? description;
   final bool isActive;
+  final double? latitude;
+  final double? longitude;
 
   const Location({
     required this.id,
@@ -15,6 +17,8 @@ class Location {
     this.workingHours,
     this.description,
     this.isActive = true,
+    this.latitude,
+    this.longitude,
   });
 }
 
