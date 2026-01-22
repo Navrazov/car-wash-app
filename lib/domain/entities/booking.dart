@@ -41,5 +41,42 @@ class Booking {
   bool get isCompleted => status == 'completed';
   bool get isCancelled => status == 'cancelled';
   bool get needsPayment => isPending && prepaymentStatus != 'paid';
+  bool get canBeCancelled => !isCompleted && !isCancelled;
+
+  Booking copyWith({
+    String? id,
+    String? userId,
+    String? locationId,
+    String? serviceId,
+    DateTime? bookingDate,
+    String? bookingTime,
+    String? status,
+    double? totalPrice,
+    double? prepaymentAmount,
+    String? prepaymentStatus,
+    String? paymentId,
+    String? paymentUrl,
+    String? notes,
+    Location? location,
+    Service? service,
+  }) {
+    return Booking(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      locationId: locationId ?? this.locationId,
+      serviceId: serviceId ?? this.serviceId,
+      bookingDate: bookingDate ?? this.bookingDate,
+      bookingTime: bookingTime ?? this.bookingTime,
+      status: status ?? this.status,
+      totalPrice: totalPrice ?? this.totalPrice,
+      prepaymentAmount: prepaymentAmount ?? this.prepaymentAmount,
+      prepaymentStatus: prepaymentStatus ?? this.prepaymentStatus,
+      paymentId: paymentId ?? this.paymentId,
+      paymentUrl: paymentUrl ?? this.paymentUrl,
+      notes: notes ?? this.notes,
+      location: location ?? this.location,
+      service: service ?? this.service,
+    );
+  }
 }
 

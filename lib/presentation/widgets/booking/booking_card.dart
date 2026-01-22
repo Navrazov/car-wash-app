@@ -8,11 +8,13 @@ import '../common/info_row.dart';
 class BookingCard extends StatelessWidget {
   final Booking booking;
   final VoidCallback? onPayTap;
+  final VoidCallback? onCancelTap;
 
   const BookingCard({
     super.key,
     required this.booking,
     this.onPayTap,
+    this.onCancelTap,
   });
 
   @override
@@ -70,6 +72,20 @@ class BookingCard extends StatelessWidget {
                   backgroundColor: AppColors.warning,
                 ),
                 child: const Text('Оплатить'),
+              ),
+            ),
+          ],
+          if (booking.canBeCancelled && onCancelTap != null) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: onCancelTap,
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: AppColors.error),
+                  foregroundColor: AppColors.error,
+                ),
+                child: const Text('Отменить бронирование'),
               ),
             ),
           ],

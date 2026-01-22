@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../domain/entities/booking.dart';
 import '../../providers/app_state.dart';
 import '../../widgets/common/empty_state.dart';
 import '../../widgets/booking/booking_card.dart';
@@ -45,13 +46,102 @@ class _HistoryScreenState extends State<HistoryScreen> {
               padding: const EdgeInsets.all(20),
               itemCount: state.bookings.length,
               itemBuilder: (context, index) {
-                return BookingCard(booking: state.bookings[index]);
+                final booking = state.bookings[index];
+                return BookingCard(
+                  booking: booking,
+                  onCancelTap: booking.canBeCancelled
+                      ? () => _showCancelDialog(context, state, booking)
+                      : null,
+                );
               },
             ),
           );
         },
       ),
     );
+  }
+
+  Future<void> _showCancelDialog(BuildContext context, AppState state, Booking booking) async {
+    String? cancelReason;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Отмена бронирования'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Вы уверены, что хотите отменить бронирование?'),
+            const SizedBox(height: 16),
+            const Text(
+              'Причина отмены (необязательно):',
+              style: TextStyle(fontWeight: FontWeight.w500),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              maxLines: 3,
+              decoration: const InputDecoration(
+                hintText: 'Укажите причину отмены...',
+                border: OutlineInputBorder(),
+                contentPadding: EdgeInsets.all(12),
+              ),
+              onChanged: (value) => cancelReason = value,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Отменить бронирование'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true) {
+      try {
+        final success = await state.cancelBooking(
+          booking.id,
+          cancelReason ?? 'Отменено пользователем',
+        );
+
+        if (success && mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Бронирование успешно отменено'),
+              backgroundColor: Colors.green,
+            ),
+          );
+          // Обновляем список бронирований
+          state.loadBookings();
+        } else if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Не удалось отменить бронирование'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Ошибка: $e'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 
   Widget _buildLoginPrompt() {

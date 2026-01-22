@@ -85,6 +85,24 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> cancelBooking(String bookingId, String reason) async {
+    try {
+      await sl.bookingRepository.cancelBooking(bookingId, reason);
+      final index = _bookings.indexWhere((b) => b.id == bookingId);
+      if (index != -1) {
+        final updatedBooking = _bookings[index].copyWith(status: 'cancelled');
+        _bookings[index] = updatedBooking;
+        notifyListeners();
+      }
+
+      await refreshProfile();
+      return true;
+    } catch (e) {
+      debugPrint('Error cancelling booking: $e');
+      return false;
+    }
+  }
+
   Future<void> refreshProfile() async {
     if (!isLoggedIn) return;
 
