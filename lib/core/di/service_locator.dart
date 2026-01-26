@@ -3,11 +3,13 @@ import '../storage/secure_storage.dart';
 import '../../data/repositories/auth_repository_impl.dart';
 import '../../data/repositories/booking_repository_impl.dart';
 import '../../data/repositories/box_repository_impl.dart';
+import '../../data/repositories/employee_repository_impl.dart';
 import '../../data/repositories/location_repository_impl.dart';
 import '../../data/repositories/service_repository_impl.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../domain/repositories/booking_repository.dart';
 import '../../domain/repositories/box_repository.dart';
+import '../../domain/repositories/employee_repository.dart';
 import '../../domain/repositories/location_repository.dart';
 import '../../domain/repositories/service_repository.dart';
 
@@ -26,6 +28,7 @@ class ServiceLocator {
   AuthRepository? _authRepository;
   BookingRepository? _bookingRepository;
   BoxRepository? _boxRepository;
+  EmployeeRepository? _employeeRepository;
   LocationRepository? _locationRepository;
   ServiceRepository? _serviceRepository;
 
@@ -46,6 +49,9 @@ class ServiceLocator {
   BoxRepository get boxRepository =>
       _boxRepository ??= BoxRepositoryImpl(apiClient: apiClient);
 
+  EmployeeRepository get employeeRepository =>
+      _employeeRepository ??= EmployeeRepositoryImpl(apiClient: apiClient);
+
   LocationRepository get locationRepository =>
       _locationRepository ??= LocationRepositoryImpl(apiClient: apiClient);
 
@@ -57,6 +63,7 @@ class ServiceLocator {
     _authRepository = null;
     _bookingRepository = null;
     _boxRepository = null;
+    _employeeRepository = null;
     _locationRepository = null;
     _serviceRepository = null;
     // Keep storage and apiClient as they are stateless

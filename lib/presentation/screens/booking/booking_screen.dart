@@ -25,6 +25,7 @@ class _BookingScreenState extends State<BookingScreen>
   int _currentStep = 0;
   Location? _selectedLocation;
   Service? _selectedService;
+  Employee? _selectedEmployee;
   Box? _selectedBox;
   DateTime _selectedDate = DateTime.now();
   String _selectedTime = '10:00';
@@ -34,6 +35,8 @@ class _BookingScreenState extends State<BookingScreen>
   List<BoxStatus> _boxStatuses = [];
   bool _loadingBoxes = false;
   Set<String> _occupiedTimeSlots = {};
+  List<Employee> _employees = [];
+  bool _loadingEmployees = false;
 
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
@@ -174,6 +177,7 @@ class _BookingScreenState extends State<BookingScreen>
             setState(() {
               _selectedLocation = l;
               _selectedBox = null; // Reset box when location changes
+              _selectedEmployee = null; // Reset employee when location changes
             });
             _loadBoxStatuses(l.id);
           },
@@ -185,6 +189,13 @@ class _BookingScreenState extends State<BookingScreen>
           onSelect: (s) => setState(() => _selectedService = s),
         );
       case 2:
+        return _EmployeeStep(
+          employees: _employees,
+          selected: _selectedEmployee,
+          isLoading: _loadingEmployees,
+          onSelect: (e) => setState(() => _selectedEmployee = e),
+        );
+      case 3:
         return _TimeStep(
           selectedDate: _selectedDate,
           selectedTime: _selectedTime,
@@ -198,7 +209,7 @@ class _BookingScreenState extends State<BookingScreen>
           },
           onTimeChanged: (t) => setState(() => _selectedTime = t),
         );
-      case 3:
+      case 4:
         return _BoxStep(
           availableBoxes: _availableBoxes,
           boxStatuses: _boxStatuses,
@@ -209,11 +220,12 @@ class _BookingScreenState extends State<BookingScreen>
           onSelect: (box) => setState(() => _selectedBox = box),
           onRefresh: () => _loadAvailableBoxes(),
         );
-      case 4:
+      case 5:
         return _ConfirmationStep(
           user: state.currentUser,
           location: _selectedLocation,
           service: _selectedService,
+          employee: _selectedEmployee,
           box: _selectedBox,
           date: _selectedDate,
           time: _selectedTime,
@@ -276,6 +288,27 @@ class _BookingScreenState extends State<BookingScreen>
     }
   }
 
+  Future<void> _loadEmployees() async {
+    if (_selectedLocation == null) return;
+    
+    setState(() => _loadingEmployees = true);
+    try {
+      final employees = await sl.employeeRepository.getEmployeesByLocation(
+        _selectedLocation!.id,
+      );
+      if (mounted) {
+        setState(() {
+          _employees = employees;
+          _loadingEmployees = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _loadingEmployees = false);
+      }
+    }
+  }
+
   Future<void> _loadOccupiedTimeSlots() async {
     if (_selectedLocation == null || _selectedService == null) return;
     
@@ -321,10 +354,12 @@ class _BookingScreenState extends State<BookingScreen>
       case 1:
         return _selectedService != null;
       case 2:
-        return true; // Time step
+        return true; // Employee step (optional)
       case 3:
-        return _selectedBox != null; // Box step
+        return true; // Time step
       case 4:
+        return _selectedBox != null; // Box step
+      case 5:
         return true; // Confirmation
       default:
         return false;
@@ -332,13 +367,17 @@ class _BookingScreenState extends State<BookingScreen>
   }
 
   Future<void> _handleNext(AppState state) async {
-    if (_currentStep < 4) {
-      // After selecting service, load occupied time slots
-      if (_currentStep == 1 && _selectedLocation != null && _selectedService != null) {
+    if (_currentStep < 5) {
+      // After selecting service, load employees
+      if (_currentStep == 1 && _selectedLocation != null) {
+        await _loadEmployees();
+      }
+      // After selecting employee, load occupied time slots
+      if (_currentStep == 2 && _selectedLocation != null && _selectedService != null) {
         _loadOccupiedTimeSlots();
       }
       // Load available boxes when moving to box selection step
-      if (_currentStep == 2 && _selectedLocation != null && _selectedService != null) {
+      if (_currentStep == 3 && _selectedLocation != null && _selectedService != null) {
         await _loadAvailableBoxes();
       }
       setState(() => _currentStep++);
@@ -379,6 +418,7 @@ class _BookingScreenState extends State<BookingScreen>
         'locationId': _selectedLocation!.id,
         'boxId': _selectedBox!.id,
         'serviceId': _selectedService!.id,
+        'employeeId': _selectedEmployee?.id,
         'bookingDate': DateFormat('yyyy-MM-dd').format(_selectedDate),
         'bookingTime': _selectedTime,
         'notes':
@@ -588,11 +628,13 @@ class _StepIndicator extends StatelessWidget {
           _StepLine(isActive: currentStep > 0),
           _StepDot(step: 1, currentStep: currentStep, label: 'Услуга'),
           _StepLine(isActive: currentStep > 1),
-          _StepDot(step: 2, currentStep: currentStep, label: 'Время'),
+          _StepDot(step: 2, currentStep: currentStep, label: 'Сотрудник'),
           _StepLine(isActive: currentStep > 2),
-          _StepDot(step: 3, currentStep: currentStep, label: 'Бокс'),
+          _StepDot(step: 3, currentStep: currentStep, label: 'Время'),
           _StepLine(isActive: currentStep > 3),
-          _StepDot(step: 4, currentStep: currentStep, label: 'Готово'),
+          _StepDot(step: 4, currentStep: currentStep, label: 'Бокс'),
+          _StepLine(isActive: currentStep > 4),
+          _StepDot(step: 5, currentStep: currentStep, label: 'Готово'),
         ],
       ),
     );
@@ -786,6 +828,215 @@ class _LocationOption extends StatelessWidget {
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
+                  colors: [Color(0xFF00E5FF), Color(0xFF0099CC)],
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check, color: Colors.white, size: 18),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmployeeStep extends StatelessWidget {
+  final List<Employee> employees;
+  final Employee? selected;
+  final bool isLoading;
+  final ValueChanged<Employee?> onSelect;
+
+  const _EmployeeStep({
+    required this.employees,
+    this.selected,
+    required this.isLoading,
+    required this.onSelect,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Выберите сотрудника',
+          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Или пропустите этот шаг',
+          style: TextStyle(
+            fontSize: 14,
+            color: AppColors.textSecondary.withOpacity(0.9),
+          ),
+        ),
+        const SizedBox(height: 20),
+        if (isLoading)
+          const Center(
+            child: Padding(
+              padding: EdgeInsets.all(40),
+              child: LoadingIndicator(),
+            ),
+          )
+        else if (employees.isEmpty)
+          AppCard(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  Icon(
+                    Icons.person_outline_rounded,
+                    size: 48,
+                    color: AppColors.textSecondary.withOpacity(0.5),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Нет доступных сотрудников',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+        else ...[
+          AppCard(
+            margin: const EdgeInsets.only(bottom: 12),
+            borderRadius: 16,
+            isSelected: selected == null,
+            onTap: () => onSelect(null),
+            child: Row(
+              children: [
+                IconBox(
+                  icon: Icons.person_outline_rounded,
+                  color: selected == null
+                      ? AppColors.primary
+                      : AppColors.textSecondary,
+                  useGradient: selected == null,
+                ),
+                const SizedBox(width: 14),
+                const Expanded(
+                  child: Text(
+                    'Любой сотрудник',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (selected == null)
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Color(0xFF00E5FF), Color(0xFF0099CC)],
+                      ),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.check, color: Colors.white, size: 18),
+                  ),
+              ],
+            ),
+          ),
+          ...employees.map(
+            (e) => _EmployeeOption(
+              employee: e,
+              isSelected: selected?.id == e.id,
+              onTap: () => onSelect(e),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _EmployeeOption extends StatelessWidget {
+  final Employee employee;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _EmployeeOption({
+    required this.employee,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: 12),
+      borderRadius: 16,
+      isSelected: isSelected,
+      onTap: onTap,
+      child: Row(
+        children: [
+          IconBox(
+            icon: Icons.person_rounded,
+            color: isSelected ? AppColors.primary : AppColors.textSecondary,
+            useGradient: isSelected,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  employee.name,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (employee.position != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    employee.position!,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary.withOpacity(0.9),
+                    ),
+                  ),
+                ],
+                if (employee.specialization.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: employee.specialization
+                        .take(3)
+                        .map(
+                          (spec) => Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AppColors.surface,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              spec,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          if (isSelected)
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
                   colors: [Color(0xFF00E5FF), Color(0xFF0099CC)],
                 ),
                 shape: BoxShape.circle,
@@ -1509,6 +1760,7 @@ class _ConfirmationStep extends StatelessWidget {
   final dynamic user;
   final Location? location;
   final Service? service;
+  final Employee? employee;
   final Box? box;
   final DateTime date;
   final String time;
@@ -1518,6 +1770,7 @@ class _ConfirmationStep extends StatelessWidget {
     this.user,
     this.location,
     this.service,
+    this.employee,
     this.box,
     required this.date,
     required this.time,
@@ -1545,6 +1798,7 @@ class _ConfirmationStep extends StatelessWidget {
         _Summary(
           location: location,
           service: service,
+          employee: employee,
           box: box,
           date: date,
           time: time,
@@ -1573,6 +1827,7 @@ class _ConfirmationStep extends StatelessWidget {
 class _Summary extends StatelessWidget {
   final Location? location;
   final Service? service;
+  final Employee? employee;
   final Box? box;
   final DateTime date;
   final String time;
@@ -1580,6 +1835,7 @@ class _Summary extends StatelessWidget {
   const _Summary({
     this.location,
     this.service,
+    this.employee,
     this.box,
     required this.date,
     required this.time,
@@ -1613,6 +1869,12 @@ class _Summary extends StatelessWidget {
             label: 'Услуга',
             value: service?.name ?? '—',
           ),
+          if (employee != null)
+            _SummaryRow(
+              icon: Icons.person_rounded,
+              label: 'Сотрудник',
+              value: employee!.name,
+            ),
           _SummaryRow(
             icon: Icons.garage_rounded,
             label: 'Бокс',

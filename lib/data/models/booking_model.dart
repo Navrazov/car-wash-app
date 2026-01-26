@@ -1,6 +1,7 @@
 import '../../domain/entities/booking.dart';
 import 'location_model.dart';
 import 'service_model.dart';
+import 'employee_model.dart';
 
 class BookingModel extends Booking {
   const BookingModel({
@@ -8,6 +9,7 @@ class BookingModel extends Booking {
     required super.userId,
     required super.locationId,
     required super.serviceId,
+    super.employeeId,
     required super.bookingDate,
     required super.bookingTime,
     required super.status,
@@ -19,6 +21,7 @@ class BookingModel extends Booking {
     super.notes,
     super.location,
     super.service,
+    super.employee,
   });
 
   factory BookingModel.fromJson(Map<String, dynamic> json) {
@@ -33,6 +36,9 @@ class BookingModel extends Booking {
       serviceId: json['serviceId'] is String 
           ? json['serviceId'] 
           : (json['serviceId']?['_id'] ?? ''),
+      employeeId: json['employeeId'] is String 
+          ? json['employeeId'] 
+          : (json['employeeId']?['_id']),
       bookingDate: DateTime.parse(json['bookingDate']),
       bookingTime: json['bookingTime'] ?? '',
       status: json['status'] ?? 'pending',
@@ -47,6 +53,9 @@ class BookingModel extends Booking {
           : null,
       service: json['serviceId'] is Map 
           ? ServiceModel.fromJson(json['serviceId']) 
+          : null,
+      employee: json['employeeId'] is Map 
+          ? EmployeeModel.fromJson(json['employeeId']) 
           : null,
     );
   }

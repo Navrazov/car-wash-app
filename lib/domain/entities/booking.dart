@@ -1,11 +1,13 @@
 import 'location.dart';
 import 'service.dart';
+import 'employee.dart';
 
 class Booking {
   final String id;
   final String userId;
   final String locationId;
   final String serviceId;
+  final String? employeeId;
   final DateTime bookingDate;
   final String bookingTime;
   final String status;
@@ -17,12 +19,14 @@ class Booking {
   final String? notes;
   final Location? location;
   final Service? service;
+  final Employee? employee;
 
   const Booking({
     required this.id,
     required this.userId,
     required this.locationId,
     required this.serviceId,
+    this.employeeId,
     required this.bookingDate,
     required this.bookingTime,
     required this.status,
@@ -34,6 +38,7 @@ class Booking {
     this.notes,
     this.location,
     this.service,
+    this.employee,
   });
 
   bool get isPending => status == 'pending';
@@ -48,6 +53,7 @@ class Booking {
     String? userId,
     String? locationId,
     String? serviceId,
+    String? employeeId,
     DateTime? bookingDate,
     String? bookingTime,
     String? status,
@@ -59,12 +65,14 @@ class Booking {
     String? notes,
     Location? location,
     Service? service,
+    Employee? employee,
   }) {
     return Booking(
       id: id ?? this.id,
       userId: userId ?? this.userId,
       locationId: locationId ?? this.locationId,
       serviceId: serviceId ?? this.serviceId,
+      employeeId: employeeId ?? this.employeeId,
       bookingDate: bookingDate ?? this.bookingDate,
       bookingTime: bookingTime ?? this.bookingTime,
       status: status ?? this.status,
@@ -76,6 +84,7 @@ class Booking {
       notes: notes ?? this.notes,
       location: location ?? this.location,
       service: service ?? this.service,
+      employee: employee ?? this.employee,
     );
   }
 }
