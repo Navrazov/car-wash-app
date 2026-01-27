@@ -7,6 +7,8 @@ import '../../widgets/home/promo_card.dart';
 import '../../widgets/home/service_category_card.dart';
 import '../../widgets/common/section_title.dart';
 import '../../widgets/common/loading_indicator.dart';
+import '../ratings/locations_ratings_screen.dart';
+import '../ratings/employees_ratings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -156,16 +158,28 @@ class _HomeScreenState extends State<HomeScreen>
           const SizedBox(width: 12),
           _QuickActionChip(
             icon: Icons.star_rounded,
-            label: 'Бонусы',
+            label: 'Рейтинг моек',
             color: AppColors.warning,
-            onTap: () {},
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const LocationsRatingsScreen(),
+                ),
+              );
+            },
           ),
           const SizedBox(width: 12),
           _QuickActionChip(
-            icon: Icons.card_giftcard_rounded,
-            label: 'Акции',
-            color: AppColors.purple,
-            onTap: () {},
+            icon: Icons.people_rounded,
+            label: 'Рейтинг сотрудников',
+            color: AppColors.primary,
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => const EmployeesRatingsScreen(),
+                ),
+              );
+            },
           ),
           const SizedBox(width: 12),
           _QuickActionChip(

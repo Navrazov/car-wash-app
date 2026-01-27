@@ -4,6 +4,8 @@ import '../../../core/theme/app_colors.dart';
 import '../../providers/app_state.dart';
 import '../../widgets/common/icon_box.dart';
 import '../auth/login_screen.dart';
+import '../ratings/locations_ratings_screen.dart';
+import '../ratings/employees_ratings_screen.dart';
 import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
@@ -73,6 +75,28 @@ class ProfileScreen extends StatelessWidget {
                     subtitle: 'Накапливайте баллы',
                     color: AppColors.purple,
                     onTap: () => _showBonusInfo(context),
+                  ),
+                  _MenuItem(
+                    icon: Icons.star_rounded,
+                    title: 'Рейтинг моек',
+                    subtitle: 'Посмотреть все мойки',
+                    color: AppColors.warning,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const LocationsRatingsScreen(),
+                      ),
+                    ),
+                  ),
+                  _MenuItem(
+                    icon: Icons.people_rounded,
+                    title: 'Рейтинг сотрудников',
+                    subtitle: 'Посмотреть всех сотрудников',
+                    color: AppColors.primary,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => const EmployeesRatingsScreen(),
+                      ),
+                    ),
                   ),
                   _MenuItem(
                     icon: Icons.notifications_outlined,

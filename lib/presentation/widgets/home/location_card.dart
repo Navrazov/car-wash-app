@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../domain/entities/location.dart';
+import '../../screens/reviews/location_reviews_screen.dart';
 
 class LocationCard extends StatefulWidget {
   final Location location;
@@ -49,6 +50,14 @@ class _LocationCardState extends State<LocationCard>
       onTapCancel: () {
         setState(() => _isPressed = false);
         _controller.reverse();
+      },
+      onLongPress: () {
+        // Show reviews on long press
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => LocationReviewsScreen(location: widget.location),
+          ),
+        );
       },
       child: ScaleTransition(
         scale: _scaleAnim,
@@ -154,35 +163,55 @@ class _LocationCardState extends State<LocationCard>
                         ),
                         const Spacer(),
                         // Rating
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.warning.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                Icons.star_rounded,
-                                size: 14,
-                                color: AppColors.warning,
-                              ),
-                              SizedBox(width: 4),
-                              Text(
-                                '4.8',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppColors.warning,
+                        if (widget.location.rating > 0)
+                          GestureDetector(
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => LocationReviewsScreen(location: widget.location),
                                 ),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 4,
                               ),
-                            ],
+                              decoration: BoxDecoration(
+                                color: AppColors.warning.withOpacity(0.15),
+                                borderRadius: BorderRadius.circular(20),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.star_rounded,
+                                    size: 14,
+                                    color: AppColors.warning,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    widget.location.rating.toStringAsFixed(1),
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.warning,
+                                    ),
+                                  ),
+                                  if (widget.location.totalReviews > 0) ...[
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '(${widget.location.totalReviews})',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        color: AppColors.textSecondary.withOpacity(0.7),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ],

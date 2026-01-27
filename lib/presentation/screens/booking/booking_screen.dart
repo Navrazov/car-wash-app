@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'package:latlong2/latlong.dart';
+import 'dart:math' as math;
 import '../../../core/theme/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/formatters.dart';
@@ -12,6 +15,7 @@ import '../../widgets/common/app_card.dart';
 import '../../widgets/common/icon_box.dart';
 import '../../widgets/common/loading_indicator.dart';
 import '../auth/login_screen.dart';
+import '../reviews/employee_reviews_screen.dart';
 
 class BookingScreen extends StatefulWidget {
   const BookingScreen({super.key});
@@ -81,7 +85,10 @@ class _BookingScreenState extends State<BookingScreen>
             return Column(
               children: [
                 _buildHeader(),
-                _StepIndicator(currentStep: _currentStep),
+                _StepIndicator(
+                  currentStep: _currentStep,
+                  skipBoxStep: _selectedEmployee?.boxId != null,
+                ),
                 Expanded(
                   child: FadeTransition(
                     opacity: _fadeAnim,
@@ -96,7 +103,12 @@ class _BookingScreenState extends State<BookingScreen>
                   canProceed: _canProceed(),
                   isLoading: _isLoading,
                   onBack: () {
-                    setState(() => _currentStep--);
+                    if (_currentStep == 5 && _selectedEmployee?.boxId != null) {
+                      // If we skipped box step, go back to time step
+                      setState(() => _currentStep = 3);
+                    } else if (_currentStep > 0) {
+                      setState(() => _currentStep--);
+                    }
                     _animController.reset();
                     _animController.forward();
                   },
@@ -193,7 +205,22 @@ class _BookingScreenState extends State<BookingScreen>
           employees: _employees,
           selected: _selectedEmployee,
           isLoading: _loadingEmployees,
-          onSelect: (e) => setState(() => _selectedEmployee = e),
+          onSelect: (e) {
+            setState(() {
+              _selectedEmployee = e;
+              // If employee has boxId, automatically set the box
+              if (e?.boxId != null && _selectedLocation != null) {
+                _selectedBox = Box(
+                  id: e!.boxId!,
+                  locationId: _selectedLocation!.id,
+                  name: '', // Will be loaded later if needed
+                  number: 0,
+                );
+              } else {
+                _selectedBox = null;
+              }
+            });
+          },
         );
       case 3:
         return _TimeStep(
@@ -318,12 +345,20 @@ class _BookingScreenState extends State<BookingScreen>
         date: _selectedDate,
       );
       
-      // Find time slots where ALL boxes are occupied
+      // Determine which box to check availability for
+      String? targetBoxId;
+      if (_selectedEmployee?.boxId != null) {
+        targetBoxId = _selectedEmployee!.boxId;
+      } else if (_selectedBox != null) {
+        targetBoxId = _selectedBox!.id;
+      }
+      
+      // Find time slots that are occupied
       final allTimeSlots = AppConstants.timeSlots;
       final occupiedSlots = <String>{};
       
       for (final time in allTimeSlots) {
-        // Check if any box is available at this time
+        // Check if boxes are available at this time
         final boxes = await sl.boxRepository.getAvailableBoxes(
           _selectedLocation!.id,
           _selectedDate,
@@ -331,8 +366,17 @@ class _BookingScreenState extends State<BookingScreen>
           _selectedService!.duration,
         );
         
-        if (boxes.isEmpty) {
-          occupiedSlots.add(time);
+        // If we have a specific box (from employee or selected), check if that box is available
+        if (targetBoxId != null) {
+          final isBoxAvailable = boxes.any((box) => box.id == targetBoxId);
+          if (!isBoxAvailable) {
+            occupiedSlots.add(time);
+          }
+        } else {
+          // If no specific box, check if ANY box is available
+          if (boxes.isEmpty) {
+            occupiedSlots.add(time);
+          }
         }
       }
       
@@ -358,7 +402,11 @@ class _BookingScreenState extends State<BookingScreen>
       case 3:
         return true; // Time step
       case 4:
-        return _selectedBox != null; // Box step
+        // Box step - skip if employee has boxId
+        if (_selectedEmployee?.boxId != null) {
+          return true;
+        }
+        return _selectedBox != null;
       case 5:
         return true; // Confirmation
       default:
@@ -372,12 +420,35 @@ class _BookingScreenState extends State<BookingScreen>
       if (_currentStep == 1 && _selectedLocation != null) {
         await _loadEmployees();
       }
-      // After selecting employee, load occupied time slots
+      // After selecting employee, load occupied time slots and set box if employee has boxId
       if (_currentStep == 2 && _selectedLocation != null && _selectedService != null) {
+        if (_selectedEmployee?.boxId != null) {
+          // Load box details if employee has boxId
+          final boxes = await sl.boxRepository.getBoxesByLocation(_selectedLocation!.id);
+          final employeeBox = boxes.firstWhere(
+            (box) => box.id == _selectedEmployee!.boxId,
+            orElse: () => Box(
+              id: _selectedEmployee!.boxId!,
+              locationId: _selectedLocation!.id,
+              name: 'Бокс',
+              number: 0,
+            ),
+          );
+          setState(() {
+            _selectedBox = employeeBox;
+          });
+        }
         _loadOccupiedTimeSlots();
       }
-      // Load available boxes when moving to box selection step
+      // Load available boxes when moving to box selection step (only if employee doesn't have boxId)
       if (_currentStep == 3 && _selectedLocation != null && _selectedService != null) {
+        // Skip box step if employee has boxId
+        if (_selectedEmployee?.boxId != null) {
+          setState(() => _currentStep = 5); // Skip to confirmation
+          _animController.reset();
+          _animController.forward();
+          return;
+        }
         await _loadAvailableBoxes();
       }
       setState(() => _currentStep++);
@@ -414,9 +485,15 @@ class _BookingScreenState extends State<BookingScreen>
     setState(() => _isLoading = true);
 
     try {
+      // Use boxId from employee if available, otherwise use selected box
+      final boxId = _selectedEmployee?.boxId ?? _selectedBox?.id;
+      if (boxId == null) {
+        throw Exception('Бокс не выбран');
+      }
+      
       await sl.bookingRepository.createBooking({
         'locationId': _selectedLocation!.id,
-        'boxId': _selectedBox!.id,
+        'boxId': boxId,
         'serviceId': _selectedService!.id,
         'employeeId': _selectedEmployee?.id,
         'bookingDate': DateFormat('yyyy-MM-dd').format(_selectedDate),
@@ -615,26 +692,32 @@ class _BookingScreenState extends State<BookingScreen>
 
 class _StepIndicator extends StatelessWidget {
   final int currentStep;
+  final bool skipBoxStep;
 
-  const _StepIndicator({required this.currentStep});
+  const _StepIndicator({required this.currentStep, this.skipBoxStep = false});
 
   @override
   Widget build(BuildContext context) {
+    // Adjust step numbers if box step is skipped
+    final adjustedStep = skipBoxStep && currentStep > 3 ? currentStep + 1 : currentStep;
+    
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
       child: Row(
         children: [
-          _StepDot(step: 0, currentStep: currentStep, label: 'Филиал'),
-          _StepLine(isActive: currentStep > 0),
-          _StepDot(step: 1, currentStep: currentStep, label: 'Услуга'),
-          _StepLine(isActive: currentStep > 1),
-          _StepDot(step: 2, currentStep: currentStep, label: 'Сотрудник'),
-          _StepLine(isActive: currentStep > 2),
-          _StepDot(step: 3, currentStep: currentStep, label: 'Время'),
-          _StepLine(isActive: currentStep > 3),
-          _StepDot(step: 4, currentStep: currentStep, label: 'Бокс'),
-          _StepLine(isActive: currentStep > 4),
-          _StepDot(step: 5, currentStep: currentStep, label: 'Готово'),
+          _StepDot(step: 0, currentStep: adjustedStep, label: 'Филиал'),
+          _StepLine(isActive: adjustedStep > 0),
+          _StepDot(step: 1, currentStep: adjustedStep, label: 'Услуга'),
+          _StepLine(isActive: adjustedStep > 1),
+          _StepDot(step: 2, currentStep: adjustedStep, label: 'Сотрудник'),
+          _StepLine(isActive: adjustedStep > 2),
+          _StepDot(step: 3, currentStep: adjustedStep, label: 'Время'),
+          _StepLine(isActive: adjustedStep > 3),
+          if (!skipBoxStep) ...[
+            _StepDot(step: 4, currentStep: adjustedStep, label: 'Бокс'),
+            _StepLine(isActive: adjustedStep > 4),
+          ],
+          _StepDot(step: skipBoxStep ? 4 : 5, currentStep: adjustedStep, label: 'Подтверждение'),
         ],
       ),
     );
@@ -737,7 +820,7 @@ class _StepLine extends StatelessWidget {
   }
 }
 
-class _LocationStep extends StatelessWidget {
+class _LocationStep extends StatefulWidget {
   final List<Location> locations;
   final Location? selected;
   final ValueChanged<Location> onSelect;
@@ -749,13 +832,48 @@ class _LocationStep extends StatelessWidget {
   });
 
   @override
+  State<_LocationStep> createState() => _LocationStepState();
+}
+
+class _LocationStepState extends State<_LocationStep> {
+  bool _showMap = false;
+  final MapController _mapController = MapController();
+
+  @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Выберите филиал',
-          style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                'Выберите филиал',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+              ),
+            ),
+            // Toggle buttons
+            Container(
+              decoration: BoxDecoration(
+                color: AppColors.card,
+                borderRadius: BorderRadius.circular(25),
+              ),
+              child: Row(
+                children: [
+                  _buildToggleButton(
+                    icon: Icons.map_rounded,
+                    isActive: _showMap,
+                    onTap: () => setState(() => _showMap = true),
+                  ),
+                  _buildToggleButton(
+                    icon: Icons.list_rounded,
+                    isActive: !_showMap,
+                    onTap: () => setState(() => _showMap = false),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 8),
         Text(
@@ -766,15 +884,188 @@ class _LocationStep extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 20),
-        ...locations.map(
-          (l) => _LocationOption(
-            location: l,
-            isSelected: selected?.id == l.id,
-            onTap: () => onSelect(l),
-          ),
+        SizedBox(
+          height: MediaQuery.of(context).size.height * 0.5,
+          child: _showMap ? _buildMapView() : _buildListView(),
         ),
       ],
     );
+  }
+
+  Widget _buildToggleButton({
+    required IconData icon,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isActive ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
+          borderRadius: BorderRadius.circular(25),
+        ),
+        child: Icon(
+          icon,
+          color: isActive ? AppColors.primary : AppColors.textSecondary,
+          size: 20,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildListView() {
+    return SingleChildScrollView(
+      child: Column(
+        children: widget.locations.map(
+          (l) => _LocationOption(
+            location: l,
+            isSelected: widget.selected?.id == l.id,
+            onTap: () => widget.onSelect(l),
+          ),
+        ).toList(),
+      ),
+    );
+  }
+
+  Widget _buildMapView() {
+    if (widget.locations.isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(40),
+          child: LoadingIndicator(size: 36),
+        ),
+      );
+    }
+
+    // Add test coordinates for locations without them
+    final locationsWithCoords = widget.locations.map((location) {
+      if (location.latitude == null || location.longitude == null) {
+        final testCoords = _getTestCoordinates(location.id);
+        return Location(
+          id: location.id,
+          name: location.name,
+          address: location.address,
+          phone: location.phone,
+          workingHours: location.workingHours,
+          description: location.description,
+          isActive: location.isActive,
+          latitude: testCoords['lat'],
+          longitude: testCoords['lng'],
+        );
+      }
+      return location;
+    }).toList();
+
+    // Center map on first location or default to Moscow
+    final centerLatLng = locationsWithCoords.isNotEmpty
+        ? LatLng(locationsWithCoords.first.latitude!, locationsWithCoords.first.longitude!)
+        : LatLng(55.7558, 37.6176); // Moscow
+
+    return FlutterMap(
+      mapController: _mapController,
+      options: MapOptions(
+        center: centerLatLng,
+        zoom: 12.0,
+        maxZoom: 18.0,
+        minZoom: 3.0,
+        onTap: (tapPosition, point) {
+          // Find nearest location to tap point
+          Location? nearestLocation;
+          double minDistance = double.infinity;
+          for (final location in locationsWithCoords) {
+            if (location.latitude != null && location.longitude != null) {
+              final distance = _calculateDistance(
+                point.latitude,
+                point.longitude,
+                location.latitude!,
+                location.longitude!,
+              );
+              if (distance < minDistance) {
+                minDistance = distance;
+                nearestLocation = location;
+              }
+            }
+          }
+          if (nearestLocation != null) {
+            widget.onSelect(nearestLocation);
+          }
+        },
+      ),
+      children: [
+        TileLayer(
+          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+          userAgentPackageName: 'com.example.car_wash_app',
+        ),
+        MarkerLayer(
+          markers: locationsWithCoords.map((location) {
+            final isSelected = widget.selected?.id == location.id;
+            return Marker(
+              point: LatLng(location.latitude!, location.longitude!),
+              width: isSelected ? 50 : 40,
+              height: isSelected ? 50 : 40,
+              child: GestureDetector(
+                onTap: () => widget.onSelect(location),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: isSelected 
+                        ? AppColors.primary.withOpacity(0.9)
+                        : AppColors.primary.withOpacity(0.8),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: AppColors.textPrimary,
+                      width: isSelected ? 3 : 2,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.3),
+                        blurRadius: isSelected ? 12 : 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Icon(
+                    Icons.location_on_rounded,
+                    color: AppColors.textPrimary,
+                    size: isSelected ? 28 : 24,
+                  ),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  Map<String, double> _getTestCoordinates(String locationId) {
+    final testCoordinates = {
+      '4': {'lat': 45.021233, 'lng': 39.101607}, // Демченко
+    };
+
+    if (testCoordinates.containsKey(locationId)) {
+      return testCoordinates[locationId]!;
+    }
+
+    return {
+      'lat': 45.021233,
+      'lng': 39.101607,
+    };
+  }
+
+  double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
+    const double earthRadius = 6371; // km
+    final dLat = _toRadians(lat2 - lat1);
+    final dLon = _toRadians(lon2 - lon1);
+    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_toRadians(lat1)) * math.cos(_toRadians(lat2)) *
+        math.sin(dLon / 2) * math.sin(dLon / 2);
+    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    return earthRadius * c;
+  }
+
+  double _toRadians(double degrees) {
+    return degrees * (math.pi / 180);
   }
 }
 
@@ -820,6 +1111,37 @@ class _LocationOption extends StatelessWidget {
                     color: AppColors.textSecondary.withOpacity(0.9),
                   ),
                 ),
+                if (location.rating > 0) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(
+                        Icons.star_rounded,
+                        size: 12,
+                        color: AppColors.warning,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        location.rating.toStringAsFixed(1),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.warning,
+                        ),
+                      ),
+                      if (location.totalReviews > 0) ...[
+                        const SizedBox(width: 4),
+                        Text(
+                          '(${location.totalReviews})',
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: AppColors.textSecondary.withOpacity(0.7),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ],
               ],
             ),
           ),
@@ -997,6 +1319,52 @@ class _EmployeeOption extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 13,
                       color: AppColors.textSecondary.withOpacity(0.9),
+                    ),
+                  ),
+                ],
+                if (employee.rating > 0) ...[
+                  const SizedBox(height: 6),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => EmployeeReviewsScreen(employee: employee),
+                        ),
+                      );
+                    },
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.star_rounded,
+                          size: 14,
+                          color: AppColors.warning,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          employee.rating.toStringAsFixed(1),
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.warning,
+                          ),
+                        ),
+                        if (employee.totalReviews > 0) ...[
+                          const SizedBox(width: 4),
+                          Text(
+                            '(${employee.totalReviews})',
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.textSecondary.withOpacity(0.7),
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            size: 12,
+                            color: AppColors.textSecondary.withOpacity(0.5),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ],

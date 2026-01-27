@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../domain/entities/booking.dart';
+import '../../../core/di/service_locator.dart';
 import '../../providers/app_state.dart';
 import '../../widgets/common/empty_state.dart';
 import '../../widgets/booking/booking_card.dart';
 import '../auth/login_screen.dart';
+import '../review/review_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -51,6 +53,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                   booking: booking,
                   onCancelTap: booking.canBeCancelled
                       ? () => _showCancelDialog(context, state, booking)
+                      : null,
+                  onReviewTap: booking.isCompleted
+                      ? () => _showReviewScreen(context, booking)
                       : null,
                 );
               },
@@ -141,6 +146,19 @@ class _HistoryScreenState extends State<HistoryScreen> {
           );
         }
       }
+    }
+  }
+
+  Future<void> _showReviewScreen(BuildContext context, Booking booking) async {
+    final result = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => ReviewScreen(booking: booking),
+      ),
+    );
+    
+    if (result == true && mounted) {
+      // Refresh bookings to show updated review status
+      context.read<AppState>().loadBookings();
     }
   }
 

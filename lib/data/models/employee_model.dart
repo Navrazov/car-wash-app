@@ -4,11 +4,14 @@ class EmployeeModel extends Employee {
   const EmployeeModel({
     required super.id,
     required super.locationId,
+    super.boxId,
     required super.name,
     super.phone,
     super.email,
     super.position,
     super.specialization,
+    super.rating,
+    super.totalReviews,
     super.isActive,
   });
 
@@ -18,6 +21,9 @@ class EmployeeModel extends Employee {
       locationId: json['locationId'] is String 
           ? json['locationId'] 
           : (json['locationId']?['_id'] ?? ''),
+      boxId: json['boxId'] is String 
+          ? json['boxId'] 
+          : (json['boxId']?['_id']),
       name: json['name'],
       phone: json['phone'],
       email: json['email'],
@@ -25,6 +31,8 @@ class EmployeeModel extends Employee {
       specialization: json['specialization'] != null 
           ? List<String>.from(json['specialization']) 
           : [],
+      rating: (json['rating'] ?? 0).toDouble(),
+      totalReviews: json['totalReviews'] ?? 0,
       isActive: json['isActive'] ?? true,
     );
   }

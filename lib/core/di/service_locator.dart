@@ -6,12 +6,14 @@ import '../../data/repositories/box_repository_impl.dart';
 import '../../data/repositories/employee_repository_impl.dart';
 import '../../data/repositories/location_repository_impl.dart';
 import '../../data/repositories/service_repository_impl.dart';
+import '../../data/repositories/review_repository_impl.dart';
 import '../../domain/repositories/auth_repository.dart';
 import '../../domain/repositories/booking_repository.dart';
 import '../../domain/repositories/box_repository.dart';
 import '../../domain/repositories/employee_repository.dart';
 import '../../domain/repositories/location_repository.dart';
 import '../../domain/repositories/service_repository.dart';
+import '../../domain/repositories/review_repository.dart';
 
 /// Simple service locator for dependency injection
 class ServiceLocator {
@@ -31,6 +33,7 @@ class ServiceLocator {
   EmployeeRepository? _employeeRepository;
   LocationRepository? _locationRepository;
   ServiceRepository? _serviceRepository;
+  ReviewRepository? _reviewRepository;
 
   // Core
   SecureStorage get storage => _storage ??= SecureStorage();
@@ -58,6 +61,9 @@ class ServiceLocator {
   ServiceRepository get serviceRepository =>
       _serviceRepository ??= ServiceRepositoryImpl(apiClient: apiClient);
 
+  ReviewRepository get reviewRepository =>
+      _reviewRepository ??= ReviewRepositoryImpl(apiClient: apiClient);
+
   /// Reset all instances (useful for testing or logout)
   void reset() {
     _authRepository = null;
@@ -66,6 +72,7 @@ class ServiceLocator {
     _employeeRepository = null;
     _locationRepository = null;
     _serviceRepository = null;
+    _reviewRepository = null;
     // Keep storage and apiClient as they are stateless
   }
 }

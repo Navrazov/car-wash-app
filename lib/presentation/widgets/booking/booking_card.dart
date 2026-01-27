@@ -9,12 +9,14 @@ class BookingCard extends StatelessWidget {
   final Booking booking;
   final VoidCallback? onPayTap;
   final VoidCallback? onCancelTap;
+  final VoidCallback? onReviewTap;
 
   const BookingCard({
     super.key,
     required this.booking,
     this.onPayTap,
     this.onCancelTap,
+    this.onReviewTap,
   });
 
   @override
@@ -72,6 +74,21 @@ class BookingCard extends StatelessWidget {
                   backgroundColor: AppColors.warning,
                 ),
                 child: const Text('Оплатить'),
+              ),
+            ),
+          ],
+          if (booking.isCompleted && onReviewTap != null) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: onReviewTap,
+                icon: const Icon(Icons.star_outline_rounded, size: 18),
+                label: const Text('Оставить отзыв'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
               ),
             ),
           ],
