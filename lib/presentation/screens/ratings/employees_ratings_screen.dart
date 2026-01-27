@@ -32,7 +32,7 @@ class _EmployeesRatingsScreenState extends State<EmployeesRatingsScreen> {
       
       for (final location in locations) {
         try {
-          final employees = await sl.employeeRepository.getByLocation(location.id);
+          final employees = await sl.employeeRepository.getEmployeesByLocation(location.id);
           allEmployees.addAll(employees);
         } catch (e) {
           // Skip if error loading employees for this location

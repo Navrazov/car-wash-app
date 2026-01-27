@@ -29,13 +29,13 @@ class _EmployeeReviewsScreenState extends State<EmployeeReviewsScreen> {
   Future<void> _loadReviews() async {
     setState(() => _isLoading = true);
     try {
-      final [reviews, stats] = await Future.wait([
+      final results = await Future.wait([
         sl.reviewRepository.getReviewsByEmployee(widget.employee.id, limit: 50),
         sl.reviewRepository.getEmployeeStats(widget.employee.id),
       ]);
       setState(() {
-        _reviews = reviews;
-        _stats = stats;
+        _reviews = results[0] as List<Review>;
+        _stats = results[1] as ReviewStats;
       });
     } catch (e) {
       if (mounted) {
