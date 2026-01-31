@@ -19,6 +19,7 @@ class BookingModel extends Booking {
     super.paymentId,
     super.paymentUrl,
     super.notes,
+    super.hasReview,
     super.location,
     super.service,
     super.employee,
@@ -48,6 +49,7 @@ class BookingModel extends Booking {
       paymentId: json['paymentId'],
       paymentUrl: json['paymentUrl'],
       notes: json['notes'],
+      hasReview: json['hasReview'] == true,
       location: json['locationId'] is Map 
           ? LocationModel.fromJson(json['locationId']) 
           : null,

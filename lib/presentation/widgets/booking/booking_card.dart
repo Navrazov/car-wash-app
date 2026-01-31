@@ -81,15 +81,46 @@ class BookingCard extends StatelessWidget {
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: onReviewTap,
-                icon: const Icon(Icons.star_outline_rounded, size: 18),
-                label: const Text('Оставить отзыв'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
-              ),
+              child: booking.hasReview
+                  ? Material(
+                      color: AppColors.surface,
+                      borderRadius: BorderRadius.circular(14),
+                      child: InkWell(
+                        onTap: onReviewTap,
+                        borderRadius: BorderRadius.circular(14),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: AppColors.border),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.star_rounded, size: 18, color: AppColors.primary),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Отзыв оставлен',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    )
+                  : ElevatedButton.icon(
+                      onPressed: onReviewTap,
+                      icon: const Icon(Icons.star_outline_rounded, size: 18),
+                      label: const Text('Оставить отзыв'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                      ),
+                    ),
             ),
           ],
           if (booking.canBeCancelled && onCancelTap != null) ...[

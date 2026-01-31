@@ -103,7 +103,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Оставить отзыв'),
+        title: Text(_hasReview ? 'Ваш отзыв' : 'Оставить отзыв'),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
@@ -128,16 +128,43 @@ class _ReviewScreenState extends State<ReviewScreen> {
               ),
               const SizedBox(height: 24),
             ],
-            
+            if (_hasReview) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                decoration: BoxDecoration(
+                  color: AppColors.success.withOpacity(0.15),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.success.withOpacity(0.5)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.check_circle_rounded, color: AppColors.success, size: 24),
+                    const SizedBox(width: 12),
+                    const Expanded(
+                      child: Text(
+                        'Вы уже оставили отзыв по этому бронированию.',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
             // Location Rating
             _buildRatingSection(
               title: 'Оцените мойку',
               subtitle: 'Как вам понравилось обслуживание?',
               rating: _locationRating,
-              onRatingChanged: (rating) => setState(() => _locationRating = rating),
+              onRatingChanged: _hasReview ? (_) {} : (rating) => setState(() => _locationRating = rating),
               commentController: _locationCommentController,
               commentHint: 'Оставьте комментарий о мойке...',
               required: true,
+              readOnly: _hasReview,
             ),
 
             const SizedBox(height: 32),
@@ -148,33 +175,35 @@ class _ReviewScreenState extends State<ReviewScreen> {
                 title: 'Оцените мойщика',
                 subtitle: 'Как вам понравился мойщик? (необязательно)',
                 rating: _employeeRating,
-                onRatingChanged: (rating) => setState(() => _employeeRating = rating),
+                onRatingChanged: _hasReview ? (_) {} : (rating) => setState(() => _employeeRating = rating),
                 commentController: _employeeCommentController,
                 commentHint: 'Оставьте комментарий о мойщике...',
                 required: false,
+                readOnly: _hasReview,
               ),
 
-            const SizedBox(height: 32),
-
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: _isLoading ? null : _submitReview,
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: AppColors.primary,
-                ),
-                child: _isLoading
-                    ? const LoadingIndicator(size: 24)
-                    : const Text(
-                        'Отправить отзыв',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
+            if (!_hasReview) ...[
+              const SizedBox(height: 32),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: _isLoading ? null : _submitReview,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    backgroundColor: AppColors.primary,
+                  ),
+                  child: _isLoading
+                      ? const LoadingIndicator(size: 24)
+                      : const Text(
+                          'Отправить отзыв',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
-                      ),
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -189,6 +218,7 @@ class _ReviewScreenState extends State<ReviewScreen> {
     required TextEditingController commentController,
     required String commentHint,
     required bool required,
+    bool readOnly = false,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -213,11 +243,13 @@ class _ReviewScreenState extends State<ReviewScreen> {
           rating: rating ?? 0,
           onRatingChanged: onRatingChanged,
           required: required,
+          readOnly: readOnly,
         ),
         const SizedBox(height: 16),
         TextField(
           controller: commentController,
           maxLines: 4,
+          readOnly: readOnly,
           decoration: InputDecoration(
             hintText: commentHint,
             border: OutlineInputBorder(
@@ -235,15 +267,17 @@ class _ReviewScreenState extends State<ReviewScreen> {
     required int rating,
     required ValueChanged<int> onRatingChanged,
     required bool required,
+    bool readOnly = false,
   }) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(5, (index) {
         final starIndex = index + 1;
         final isSelected = starIndex <= rating;
-        
+
         return GestureDetector(
-          onTap: () => onRatingChanged(starIndex),
+          onTap: readOnly ? null : () => onRatingChanged(starIndex),
+          behavior: readOnly ? HitTestBehavior.deferToChild : HitTestBehavior.opaque,
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8),
             child: Icon(

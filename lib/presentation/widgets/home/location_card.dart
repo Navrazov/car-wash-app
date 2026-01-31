@@ -295,9 +295,7 @@ class _WorkingStatus extends StatelessWidget {
         ],
       ],
     );
-  }
-
-  bool _isCurrentlyOpen() {
+  }  bool _isCurrentlyOpen() {
     final now = DateTime.now();
     final hour = now.hour;
     // Простая логика: открыто с 9 до 21

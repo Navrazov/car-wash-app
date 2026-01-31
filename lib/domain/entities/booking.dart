@@ -17,6 +17,7 @@ class Booking {
   final String? paymentId;
   final String? paymentUrl;
   final String? notes;
+  final bool hasReview;
   final Location? location;
   final Service? service;
   final Employee? employee;
@@ -36,6 +37,7 @@ class Booking {
     this.paymentId,
     this.paymentUrl,
     this.notes,
+    this.hasReview = false,
     this.location,
     this.service,
     this.employee,
@@ -63,6 +65,7 @@ class Booking {
     String? paymentId,
     String? paymentUrl,
     String? notes,
+    bool? hasReview,
     Location? location,
     Service? service,
     Employee? employee,
@@ -82,6 +85,7 @@ class Booking {
       paymentId: paymentId ?? this.paymentId,
       paymentUrl: paymentUrl ?? this.paymentUrl,
       notes: notes ?? this.notes,
+      hasReview: hasReview ?? this.hasReview,
       location: location ?? this.location,
       service: service ?? this.service,
       employee: employee ?? this.employee,
