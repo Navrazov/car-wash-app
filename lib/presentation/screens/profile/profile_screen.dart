@@ -8,8 +8,23 @@ import '../ratings/locations_ratings_screen.dart';
 import '../ratings/employees_ratings_screen.dart';
 import 'edit_profile_screen.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
+
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final state = context.read<AppState>();
+      if (state.isLoggedIn) state.refreshProfile();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
