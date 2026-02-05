@@ -247,9 +247,7 @@ class _WorkingStatus extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isOpen = _isCurrentlyOpen();
-
-    return Row(
+    final isOpen = _isCurrentlyOpen();    return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(

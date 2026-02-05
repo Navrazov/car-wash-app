@@ -340,11 +340,6 @@ class _BookingScreenState extends State<BookingScreen>
     if (_selectedLocation == null || _selectedService == null) return;
     
     try {
-      final statuses = await sl.boxRepository.getBoxesStatus(
-        _selectedLocation!.id,
-        date: _selectedDate,
-      );
-      
       // Determine which box to check availability for
       String? targetBoxId;
       if (_selectedEmployee?.boxId != null) {
@@ -353,36 +348,23 @@ class _BookingScreenState extends State<BookingScreen>
         targetBoxId = _selectedBox!.id;
       }
       
-      // Find time slots that are occupied
-      final allTimeSlots = AppConstants.timeSlots;
-      final occupiedSlots = <String>{};
+      // Use efficient batch endpoint to get all occupied slots at once
+      final occupiedSlots = await sl.boxRepository.getOccupiedTimeSlots(
+        _selectedLocation!.id,
+        _selectedDate,
+        _selectedService!.duration,
+        boxId: targetBoxId,
+      );
       
-      for (final time in allTimeSlots) {
-        // Check if boxes are available at this time
-        final boxes = await sl.boxRepository.getAvailableBoxes(
-          _selectedLocation!.id,
-          _selectedDate,
-          time,
-          _selectedService!.duration,
-        );
-        
-        // If we have a specific box (from employee or selected), check if that box is available
-        if (targetBoxId != null) {
-          final isBoxAvailable = boxes.any((box) => box.id == targetBoxId);
-          if (!isBoxAvailable) {
-            occupiedSlots.add(time);
-          }
-        } else {
-          // If no specific box, check if ANY box is available
-          if (boxes.isEmpty) {
-            occupiedSlots.add(time);
-          }
-        }
-      }
+      // Also load box statuses for display
+      final statuses = await sl.boxRepository.getBoxesStatus(
+        _selectedLocation!.id,
+        date: _selectedDate,
+      );
       
       if (mounted) {
         setState(() {
-          _occupiedTimeSlots = occupiedSlots;
+          _occupiedTimeSlots = occupiedSlots.toSet();
           _boxStatuses = statuses;
         });
       }

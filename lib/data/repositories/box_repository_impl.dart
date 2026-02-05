@@ -41,6 +41,20 @@ class BoxRepositoryImpl implements BoxRepository {
     }
     return [];
   }
+
+  @override
+  Future<List<String>> getOccupiedTimeSlots(String locationId, DateTime date, int duration, {String? boxId}) async {
+    final dateStr = DateFormat('yyyy-MM-dd').format(date);
+    String url = '/public/locations/$locationId/boxes/occupied-slots?date=$dateStr&duration=$duration';
+    if (boxId != null) {
+      url += '&boxId=$boxId';
+    }
+    final response = await _apiClient.get(url);
+    if (response is List) {
+      return response.cast<String>();
+    }
+    return [];
+  }
 }
 
 
