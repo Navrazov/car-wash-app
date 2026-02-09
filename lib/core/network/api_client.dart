@@ -75,6 +75,19 @@ class ApiClient {
     return _handleResponse(response, fromJson: fromJson);
   }
 
+  Future<T> delete<T>(
+    String endpoint, {
+    bool auth = true,
+    T Function(dynamic)? fromJson,
+  }) async {
+    final response = await http.delete(
+      Uri.parse('$_baseUrl$endpoint'),
+      headers: await _getHeaders(auth: auth),
+    );
+
+    return _handleResponse(response, fromJson: fromJson);
+  }
+
   T _handleResponse<T>(
     http.Response response, {
     T Function(dynamic)? fromJson,

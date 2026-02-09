@@ -1,4 +1,5 @@
 export 'user.dart';
+export 'car.dart';
 export 'location.dart';
 export 'service.dart';
 export 'booking.dart';

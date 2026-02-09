@@ -6,6 +6,7 @@ import '../../widgets/common/icon_box.dart';
 import '../auth/login_screen.dart';
 import '../ratings/locations_ratings_screen.dart';
 import '../ratings/employees_ratings_screen.dart';
+import '../cars/my_cars_screen.dart';
 import 'edit_profile_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
@@ -65,7 +66,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _MenuItem(
                     icon: Icons.person_outline_rounded,
                     title: 'Личные данные',
-                    subtitle: 'Имя, email, автомобиль',
+                    subtitle: 'Имя, email, телефон',
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) =>
@@ -76,11 +77,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   _MenuItem(
                     icon: Icons.directions_car_outlined,
                     title: 'Мои автомобили',
-                    subtitle: state.currentUser?.carModel ?? 'Добавьте авто',
+                    subtitle: state.currentUser?.defaultCar?.displayName ?? 'Добавьте авто',
                     onTap: () => Navigator.of(context).push(
                       MaterialPageRoute(
-                        builder: (_) =>
-                            EditProfileScreen(user: state.currentUser!),
+                        builder: (_) => const MyCarsScreen(),
                       ),
                     ),
                   ),

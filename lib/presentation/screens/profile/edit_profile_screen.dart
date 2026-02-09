@@ -22,8 +22,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _emailController = TextEditingController();
-  final _carModelController = TextEditingController();
-  final _carNumberController = TextEditingController();
   final _authRepository = AuthRepositoryImpl();
   bool _isLoading = false;
 
@@ -32,16 +30,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     super.initState();
     _nameController.text = widget.user.name ?? '';
     _emailController.text = widget.user.email ?? '';
-    _carModelController.text = widget.user.carModel ?? '';
-    _carNumberController.text = widget.user.carNumber ?? '';
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
-    _carModelController.dispose();
-    _carNumberController.dispose();
     super.dispose();
   }
 
@@ -55,12 +49,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         'name': _nameController.text.trim(),
         'email': _emailController.text.trim().isNotEmpty
             ? _emailController.text.trim()
-            : null,
-        'carModel': _carModelController.text.trim().isNotEmpty
-            ? _carModelController.text.trim()
-            : null,
-        'carNumber': _carNumberController.text.trim().toUpperCase().isNotEmpty
-            ? _carNumberController.text.trim().toUpperCase()
             : null,
       });
 
@@ -269,28 +257,6 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     ),
                   ],
                 ),
-              ),
-
-              const SizedBox(height: 32),
-
-              // Car info section
-              _SectionTitle(title: 'Автомобиль'),
-              const SizedBox(height: 16),
-
-              _InputField(
-                controller: _carModelController,
-                label: 'Марка и модель',
-                icon: Icons.directions_car_rounded,
-                hint: 'Toyota Camry',
-              ),
-              const SizedBox(height: 16),
-
-              _InputField(
-                controller: _carNumberController,
-                label: 'Гос. номер',
-                icon: Icons.credit_card_rounded,
-                hint: 'А123БВ777',
-                textCapitalization: TextCapitalization.characters,
               ),
 
               const SizedBox(height: 40),
