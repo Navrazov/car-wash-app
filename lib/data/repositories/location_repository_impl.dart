@@ -15,7 +15,43 @@ class LocationRepositoryImpl implements LocationRepository {
       '/public/locations',
       auth: false,
     );
-    return response.map((json) => LocationModel.fromJson(json)).toList();
+    final locations = response.map((json) => LocationModel.fromJson(json)).toList();
+
+    final enriched = await Future.wait(locations.map((location) async {
+      if (location.latitude != null && location.longitude != null) return location;
+      if (location.address.trim().length < 3) return location;
+
+      try {
+        final geocoded = await _apiClient.get<dynamic>(
+          '/public/geocoding/forward?address=${Uri.encodeComponent(location.address)}',
+          auth: false,
+        );
+        if (geocoded is Map<String, dynamic>) {
+          final lat = (geocoded['lat'] as num?)?.toDouble();
+          final lng = (geocoded['lng'] as num?)?.toDouble();
+          if (lat != null && lng != null) {
+            return Location(
+              id: location.id,
+              name: location.name,
+              address: location.address,
+              phone: location.phone,
+              workingHours: location.workingHours,
+              description: location.description,
+              rating: location.rating,
+              totalReviews: location.totalReviews,
+              isActive: location.isActive,
+              latitude: lat,
+              longitude: lng,
+            );
+          }
+        }
+      } catch (_) {
+        // Keep original location without coordinates.
+      }
+      return location;
+    }));
+
+    return enriched;
   }
 
   @override
@@ -24,7 +60,38 @@ class LocationRepositoryImpl implements LocationRepository {
       '/public/locations/$id',
       auth: false,
     );
-    return LocationModel.fromJson(response);
+    final location = LocationModel.fromJson(response);
+    if (location.latitude != null && location.longitude != null) return location;
+    if (location.address.trim().length < 3) return location;
+
+    try {
+      final geocoded = await _apiClient.get<dynamic>(
+        '/public/geocoding/forward?address=${Uri.encodeComponent(location.address)}',
+        auth: false,
+      );
+      if (geocoded is Map<String, dynamic>) {
+        final lat = (geocoded['lat'] as num?)?.toDouble();
+        final lng = (geocoded['lng'] as num?)?.toDouble();
+        if (lat != null && lng != null) {
+          return Location(
+            id: location.id,
+            name: location.name,
+            address: location.address,
+            phone: location.phone,
+            workingHours: location.workingHours,
+            description: location.description,
+            rating: location.rating,
+            totalReviews: location.totalReviews,
+            isActive: location.isActive,
+            latitude: lat,
+            longitude: lng,
+          );
+        }
+      }
+    } catch (_) {
+      // Ignore geocode fallback failures.
+    }
+
+    return location;
   }
 }
-

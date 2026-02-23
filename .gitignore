@@ -94,3 +94,9 @@ coverage/
 # Environment
 .env
 .env.*
+
+# Local caches/temp
+.eslintcache
+tmp/
+temp/
+*.tmp

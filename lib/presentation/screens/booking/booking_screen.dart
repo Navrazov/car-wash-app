@@ -1,19 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
-import 'dart:math' as math;
+import 'package:yandex_mapkit/yandex_mapkit.dart';
+import 'dart:ui' as ui;
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/di/service_locator.dart';
 import '../../../domain/entities/entities.dart';
-import '../../../domain/repositories/box_repository.dart';
 import '../../providers/app_state.dart';
 import '../../widgets/common/app_card.dart';
 import '../../widgets/common/icon_box.dart';
 import '../../widgets/common/loading_indicator.dart';
+import '../../widgets/common/yandex_web_map_view.dart';
 import '../auth/login_screen.dart';
 import '../reviews/employee_reviews_screen.dart';
 
@@ -285,7 +288,7 @@ class _BookingScreenState extends State<BookingScreen>
 
   Future<void> _loadAvailableBoxes() async {
     if (_selectedLocation == null || _selectedService == null) return;
-    
+
     setState(() => _loadingBoxes = true);
     try {
       final boxes = await sl.boxRepository.getAvailableBoxes(
@@ -294,13 +297,13 @@ class _BookingScreenState extends State<BookingScreen>
         _selectedTime,
         _selectedService!.duration,
       );
-      
+
       // Also load all box statuses to show which are busy
       final statuses = await sl.boxRepository.getBoxesStatus(
         _selectedLocation!.id,
         date: _selectedDate,
       );
-      
+
       if (mounted) {
         setState(() {
           _availableBoxes = boxes;
@@ -317,7 +320,7 @@ class _BookingScreenState extends State<BookingScreen>
 
   Future<void> _loadEmployees() async {
     if (_selectedLocation == null) return;
-    
+
     setState(() => _loadingEmployees = true);
     try {
       final employees = await sl.employeeRepository.getEmployeesByLocation(
@@ -338,7 +341,7 @@ class _BookingScreenState extends State<BookingScreen>
 
   Future<void> _loadOccupiedTimeSlots() async {
     if (_selectedLocation == null || _selectedService == null) return;
-    
+
     try {
       // Determine which box to check availability for
       String? targetBoxId;
@@ -347,7 +350,7 @@ class _BookingScreenState extends State<BookingScreen>
       } else if (_selectedBox != null) {
         targetBoxId = _selectedBox!.id;
       }
-      
+
       // Use efficient batch endpoint to get all occupied slots at once
       final occupiedSlots = await sl.boxRepository.getOccupiedTimeSlots(
         _selectedLocation!.id,
@@ -355,13 +358,13 @@ class _BookingScreenState extends State<BookingScreen>
         _selectedService!.duration,
         boxId: targetBoxId,
       );
-      
+
       // Also load box statuses for display
       final statuses = await sl.boxRepository.getBoxesStatus(
         _selectedLocation!.id,
         date: _selectedDate,
       );
-      
+
       if (mounted) {
         setState(() {
           _occupiedTimeSlots = occupiedSlots.toSet();
@@ -403,10 +406,13 @@ class _BookingScreenState extends State<BookingScreen>
         await _loadEmployees();
       }
       // After selecting employee, load occupied time slots and set box if employee has boxId
-      if (_currentStep == 2 && _selectedLocation != null && _selectedService != null) {
+      if (_currentStep == 2 &&
+          _selectedLocation != null &&
+          _selectedService != null) {
         if (_selectedEmployee?.boxId != null) {
           // Load box details if employee has boxId
-          final boxes = await sl.boxRepository.getBoxesByLocation(_selectedLocation!.id);
+          final boxes =
+              await sl.boxRepository.getBoxesByLocation(_selectedLocation!.id);
           final employeeBox = boxes.firstWhere(
             (box) => box.id == _selectedEmployee!.boxId,
             orElse: () => Box(
@@ -423,7 +429,9 @@ class _BookingScreenState extends State<BookingScreen>
         _loadOccupiedTimeSlots();
       }
       // Load available boxes when moving to box selection step (only if employee doesn't have boxId)
-      if (_currentStep == 3 && _selectedLocation != null && _selectedService != null) {
+      if (_currentStep == 3 &&
+          _selectedLocation != null &&
+          _selectedService != null) {
         // Skip box step if employee has boxId
         if (_selectedEmployee?.boxId != null) {
           setState(() => _currentStep = 5); // Skip to confirmation
@@ -472,7 +480,7 @@ class _BookingScreenState extends State<BookingScreen>
       if (boxId == null) {
         throw Exception('Бокс не выбран');
       }
-      
+
       await sl.bookingRepository.createBooking({
         'locationId': _selectedLocation!.id,
         'boxId': boxId,
@@ -533,7 +541,8 @@ class _BookingScreenState extends State<BookingScreen>
                 ),
               ],
             ),
-            child: const Icon(Icons.person_rounded, color: Colors.white, size: 40),
+            child:
+                const Icon(Icons.person_rounded, color: Colors.white, size: 40),
           ),
           const SizedBox(height: 24),
           const Text(
@@ -618,7 +627,8 @@ class _BookingScreenState extends State<BookingScreen>
                   ),
                 ],
               ),
-              child: const Icon(Icons.check_rounded, color: Colors.white, size: 44),
+              child: const Icon(Icons.check_rounded,
+                  color: Colors.white, size: 44),
             ),
             const SizedBox(height: 24),
             const Text(
@@ -681,8 +691,9 @@ class _StepIndicator extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Adjust step numbers if box step is skipped
-    final adjustedStep = skipBoxStep && currentStep > 3 ? currentStep + 1 : currentStep;
-    
+    final adjustedStep =
+        skipBoxStep && currentStep > 3 ? currentStep + 1 : currentStep;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
       child: Row(
@@ -699,7 +710,10 @@ class _StepIndicator extends StatelessWidget {
             _StepDot(step: 4, currentStep: adjustedStep, label: 'Бокс'),
             _StepLine(isActive: adjustedStep > 4),
           ],
-          _StepDot(step: skipBoxStep ? 4 : 5, currentStep: adjustedStep, label: 'Подтверждение'),
+          _StepDot(
+              step: skipBoxStep ? 4 : 5,
+              currentStep: adjustedStep,
+              label: 'Подтверждение'),
         ],
       ),
     );
@@ -819,7 +833,186 @@ class _LocationStep extends StatefulWidget {
 
 class _LocationStepState extends State<_LocationStep> {
   bool _showMap = false;
-  final MapController _mapController = MapController();
+  Uint8List? _pinBytes;
+  Uint8List? _pinSelectedBytes;
+  YandexMapController? _mapController;
+  YandexMapController? _fullscreenMapController;
+
+  @override
+  void initState() {
+    super.initState();
+    _generateMarkerIcons();
+  }
+
+  Future<void> _generateMarkerIcons() async {
+    _pinBytes = await _createPinIcon(const Color(0xFF0D9488), 64, 88);
+    _pinSelectedBytes = await _createPinIcon(AppColors.primary, 80, 110);
+    if (mounted) setState(() {});
+  }
+
+  bool _isCompactMobile(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    return size.width < 900 || size.shortestSide < 600;
+  }
+
+  void _handleMapToggleTap() async {
+    if (!_isCompactMobile(context)) {
+      setState(() => _showMap = true);
+      return;
+    }
+
+    setState(() => _showMap = true);
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (fullscreenContext) => Scaffold(
+          backgroundColor: AppColors.background,
+          body: SafeArea(
+            child: Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 12, left: 12, right: 12),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Material(
+                      color: AppColors.card.withOpacity(0.92),
+                      borderRadius: BorderRadius.circular(12),
+                      child: IconButton(
+                        onPressed: () => Navigator.of(fullscreenContext).pop(),
+                        icon: const Icon(Icons.close_rounded,
+                            color: AppColors.textPrimary),
+                        tooltip: 'Закрыть карту',
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Expanded(child: _buildFullscreenMapOnlyView()),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+
+    if (!mounted) return;
+    setState(() => _showMap = false);
+  }
+
+  Future<void> _changeNativeZoom(
+      YandexMapController? controller, double delta) async {
+    if (controller == null) return;
+    final position = await controller.getCameraPosition();
+    final nextZoom = (position.zoom + delta).clamp(3.0, 19.0);
+    await controller.moveCamera(
+      CameraUpdate.newCameraPosition(position.copyWith(zoom: nextZoom)),
+      animation:
+          const MapAnimation(type: MapAnimationType.smooth, duration: 0.2),
+    );
+  }
+
+  Future<void> _moveToCurrentLocation(YandexMapController? controller) async {
+    if (controller == null) return;
+    final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    if (!serviceEnabled) return;
+
+    var permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+    }
+    if (permission == LocationPermission.denied ||
+        permission == LocationPermission.deniedForever) {
+      return;
+    }
+
+    final position = await Geolocator.getCurrentPosition(
+      desiredAccuracy: LocationAccuracy.high,
+    );
+
+    await controller.moveCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: Point(
+            latitude: position.latitude,
+            longitude: position.longitude,
+          ),
+          zoom: 15,
+        ),
+      ),
+      animation:
+          const MapAnimation(type: MapAnimationType.smooth, duration: 0.3),
+    );
+  }
+
+  Widget _buildZoomControls({
+    required VoidCallback onZoomIn,
+    required VoidCallback onZoomOut,
+    VoidCallback? onMyLocation,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: AppColors.card.withOpacity(0.92),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            onPressed: onZoomIn,
+            icon: const Icon(Icons.add_rounded, color: AppColors.textPrimary),
+            tooltip: 'Увеличить',
+          ),
+          const Divider(height: 1, color: AppColors.border),
+          IconButton(
+            onPressed: onZoomOut,
+            icon:
+                const Icon(Icons.remove_rounded, color: AppColors.textPrimary),
+            tooltip: 'Уменьшить',
+          ),
+          if (onMyLocation != null) ...[
+            const Divider(height: 1, color: AppColors.border),
+            IconButton(
+              onPressed: onMyLocation,
+              icon: const Icon(
+                Icons.my_location_rounded,
+                color: AppColors.textPrimary,
+              ),
+              tooltip: 'Моя локация',
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  static Future<Uint8List> _createPinIcon(
+      Color color, double w, double h) async {
+    final recorder = ui.PictureRecorder();
+    final canvas = Canvas(recorder, Rect.fromLTWH(0, 0, w, h));
+    final cx = w / 2;
+    final r = w / 2;
+
+    // Pin body
+    final path = Path()
+      ..moveTo(cx, 0)
+      ..cubicTo(cx - r * 0.55, 0, 0, r * 0.45, 0, r)
+      ..cubicTo(0, r * 1.75, cx, h, cx, h)
+      ..cubicTo(cx, h, w, r * 1.75, w, r)
+      ..cubicTo(w, r * 0.45, cx + r * 0.55, 0, cx, 0)
+      ..close();
+    canvas.drawPath(path, Paint()..color = color);
+
+    // Inner circle
+    canvas.drawCircle(
+      Offset(cx, r),
+      r * 0.44,
+      Paint()..color = const Color(0xFFFFFFFF),
+    );
+
+    final picture = recorder.endRecording();
+    final image = await picture.toImage(w.toInt(), h.toInt());
+    final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+    return byteData!.buffer.asUint8List();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -834,7 +1027,6 @@ class _LocationStepState extends State<_LocationStep> {
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
               ),
             ),
-            // Toggle buttons
             Container(
               decoration: BoxDecoration(
                 color: AppColors.card,
@@ -845,7 +1037,7 @@ class _LocationStepState extends State<_LocationStep> {
                   _buildToggleButton(
                     icon: Icons.map_rounded,
                     isActive: _showMap,
-                    onTap: () => setState(() => _showMap = true),
+                    onTap: _handleMapToggleTap,
                   ),
                   _buildToggleButton(
                     icon: Icons.list_rounded,
@@ -884,7 +1076,9 @@ class _LocationStepState extends State<_LocationStep> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: isActive ? AppColors.primary.withOpacity(0.1) : Colors.transparent,
+          color: isActive
+              ? AppColors.primary.withOpacity(0.1)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(25),
         ),
         child: Icon(
@@ -899,19 +1093,21 @@ class _LocationStepState extends State<_LocationStep> {
   Widget _buildListView() {
     return SingleChildScrollView(
       child: Column(
-        children: widget.locations.map(
-          (l) => _LocationOption(
-            location: l,
-            isSelected: widget.selected?.id == l.id,
-            onTap: () => widget.onSelect(l),
-          ),
-        ).toList(),
+        children: widget.locations
+            .map(
+              (l) => _LocationOption(
+                location: l,
+                isSelected: widget.selected?.id == l.id,
+                onTap: () => widget.onSelect(l),
+              ),
+            )
+            .toList(),
       ),
     );
   }
 
   Widget _buildMapView() {
-    if (widget.locations.isEmpty) {
+    if (widget.locations.isEmpty || _pinBytes == null) {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(40),
@@ -920,134 +1116,273 @@ class _LocationStepState extends State<_LocationStep> {
       );
     }
 
-    // Add test coordinates for locations without them
-    final locationsWithCoords = widget.locations.map((location) {
-      if (location.latitude == null || location.longitude == null) {
-        final testCoords = _getTestCoordinates(location.id);
-        return Location(
-          id: location.id,
-          name: location.name,
-          address: location.address,
-          phone: location.phone,
-          workingHours: location.workingHours,
-          description: location.description,
-          isActive: location.isActive,
-          latitude: testCoords['lat'],
-          longitude: testCoords['lng'],
-        );
-      }
-      return location;
-    }).toList();
+    final locationsWithCoords = widget.locations
+        .where((l) => l.latitude != null && l.longitude != null)
+        .toList();
 
-    // Center map on first location or default to Moscow
-    final centerLatLng = locationsWithCoords.isNotEmpty
-        ? LatLng(locationsWithCoords.first.latitude!, locationsWithCoords.first.longitude!)
-        : LatLng(55.7558, 37.6176); // Moscow
-
-    return FlutterMap(
-      mapController: _mapController,
-      options: MapOptions(
-        center: centerLatLng,
-        zoom: 12.0,
-        maxZoom: 18.0,
-        minZoom: 3.0,
-        onTap: (tapPosition, point) {
-          // Find nearest location to tap point
-          Location? nearestLocation;
-          double minDistance = double.infinity;
-          for (final location in locationsWithCoords) {
-            if (location.latitude != null && location.longitude != null) {
-              final distance = _calculateDistance(
-                point.latitude,
-                point.longitude,
-                location.latitude!,
-                location.longitude!,
-              );
-              if (distance < minDistance) {
-                minDistance = distance;
-                nearestLocation = location;
-              }
-            }
-          }
-          if (nearestLocation != null) {
-            widget.onSelect(nearestLocation);
-          }
-        },
-      ),
-      children: [
-        TileLayer(
-          urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-          userAgentPackageName: 'com.example.car_wash_app',
+    if (locationsWithCoords.isEmpty) {
+      return const Center(
+        child: Text(
+          'У филиалов нет координат',
+          style: TextStyle(color: AppColors.textSecondary),
         ),
-        MarkerLayer(
-          markers: locationsWithCoords.map((location) {
-            final isSelected = widget.selected?.id == location.id;
-            return Marker(
-              point: LatLng(location.latitude!, location.longitude!),
-              width: isSelected ? 50 : 40,
-              height: isSelected ? 50 : 40,
-              child: GestureDetector(
-                onTap: () => widget.onSelect(location),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: isSelected 
-                        ? AppColors.primary.withOpacity(0.9)
-                        : AppColors.primary.withOpacity(0.8),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: AppColors.textPrimary,
-                      width: isSelected ? 3 : 2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.3),
-                        blurRadius: isSelected ? 12 : 8,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+      );
+    }
+
+    final centerPoint = locationsWithCoords.isNotEmpty
+        ? Point(
+            latitude: locationsWithCoords.first.latitude!,
+            longitude: locationsWithCoords.first.longitude!,
+          )
+        : const Point(latitude: 55.7558, longitude: 37.6176);
+
+    if (kIsWeb) {
+      return _buildWebMapFallback(locationsWithCoords);
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: Column(
+        children: [
+          Expanded(
+            child: YandexMap(
+              gestureRecognizers: {
+                Factory<OneSequenceGestureRecognizer>(
+                  () => EagerGestureRecognizer(),
+                ),
+              },
+              mapObjects: locationsWithCoords.map((location) {
+                final isSelected = widget.selected?.id == location.id;
+                final bytes =
+                    isSelected ? (_pinSelectedBytes ?? _pinBytes!) : _pinBytes!;
+                return PlacemarkMapObject(
+                  mapId: MapObjectId('loc_${location.id}'),
+                  point: Point(
+                    latitude: location.latitude!,
+                    longitude: location.longitude!,
                   ),
-                  child: Icon(
-                    Icons.location_on_rounded,
-                    color: AppColors.textPrimary,
-                    size: isSelected ? 28 : 24,
+                  icon: PlacemarkIcon.single(
+                    PlacemarkIconStyle(
+                      image: BitmapDescriptor.fromBytes(bytes),
+                      scale: isSelected ? 0.9 : 0.7,
+                    ),
+                  ),
+                  opacity: 1.0,
+                  onTap: (_, __) => widget.onSelect(location),
+                );
+              }).toList(),
+              onMapCreated: (controller) {
+                _mapController = controller;
+                controller.moveCamera(
+                  CameraUpdate.newCameraPosition(
+                    CameraPosition(target: centerPoint, zoom: 12),
+                  ),
+                );
+
+                if (locationsWithCoords.length > 1) {
+                  _fitBounds(controller, locationsWithCoords);
+                }
+              },
+            ),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: _buildZoomControls(
+              onZoomIn: () => _changeNativeZoom(_mapController, 1),
+              onZoomOut: () => _changeNativeZoom(_mapController, -1),
+              onMyLocation: () => _moveToCurrentLocation(_mapController),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFullscreenMapOnlyView() {
+    if (widget.locations.isEmpty || _pinBytes == null) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(40),
+          child: LoadingIndicator(size: 36),
+        ),
+      );
+    }
+
+    final locationsWithCoords = widget.locations
+        .where((l) => l.latitude != null && l.longitude != null)
+        .toList();
+
+    if (locationsWithCoords.isEmpty) {
+      return const Center(
+        child: Text(
+          'У филиалов нет координат',
+          style: TextStyle(color: AppColors.textSecondary),
+        ),
+      );
+    }
+
+    final centerPoint = Point(
+      latitude: locationsWithCoords.first.latitude!,
+      longitude: locationsWithCoords.first.longitude!,
+    );
+
+    if (kIsWeb) {
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: YandexWebMapView(
+          url: _buildYandexWidgetUrl(locationsWithCoords),
+        ),
+      );
+    }
+
+    return Column(
+      children: [
+        Expanded(
+          child: YandexMap(
+            gestureRecognizers: {
+              Factory<OneSequenceGestureRecognizer>(
+                () => EagerGestureRecognizer(),
+              ),
+            },
+            mapObjects: locationsWithCoords.map((location) {
+              final isSelected = widget.selected?.id == location.id;
+              final bytes =
+                  isSelected ? (_pinSelectedBytes ?? _pinBytes!) : _pinBytes!;
+              return PlacemarkMapObject(
+                mapId: MapObjectId('loc_fs_${location.id}'),
+                point: Point(
+                  latitude: location.latitude!,
+                  longitude: location.longitude!,
+                ),
+                icon: PlacemarkIcon.single(
+                  PlacemarkIconStyle(
+                    image: BitmapDescriptor.fromBytes(bytes),
+                    scale: isSelected ? 1.0 : 0.8,
                   ),
                 ),
-              ),
-            );
-          }).toList(),
+                opacity: 1.0,
+                onTap: (_, __) => widget.onSelect(location),
+              );
+            }).toList(),
+            onMapCreated: (controller) {
+              _fullscreenMapController = controller;
+              controller.moveCamera(
+                CameraUpdate.newCameraPosition(
+                  CameraPosition(target: centerPoint, zoom: 12),
+                ),
+              );
+              if (locationsWithCoords.length > 1) {
+                _fitBounds(controller, locationsWithCoords);
+              }
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerRight,
+          child: _buildZoomControls(
+            onZoomIn: () => _changeNativeZoom(_fullscreenMapController, 1),
+            onZoomOut: () => _changeNativeZoom(_fullscreenMapController, -1),
+            onMyLocation: () =>
+                _moveToCurrentLocation(_fullscreenMapController),
+          ),
         ),
       ],
     );
   }
 
-  Map<String, double> _getTestCoordinates(String locationId) {
-    final testCoordinates = {
-      '4': {'lat': 45.021233, 'lng': 39.101607}, // Демченко
-    };
+  Widget _buildWebMapFallback(List<Location> locationsWithCoords) {
+    return Column(
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: SizedBox(
+            height: 220,
+            width: double.infinity,
+            child: YandexWebMapView(
+              url: _buildYandexWidgetUrl(locationsWithCoords),
+            ),
+          ),
+        ),
+        if (widget.selected != null &&
+            widget.selected!.latitude != null &&
+            widget.selected!.longitude != null)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton.icon(
+              onPressed: () => _openLocationInYandex(widget.selected!),
+              icon: const Icon(Icons.open_in_new_rounded, size: 18),
+              label: const Text('Открыть в Яндекс Картах'),
+            ),
+          ),
+        const SizedBox(height: 8),
+        Expanded(child: _buildListView()),
+      ],
+    );
+  }
 
-    if (testCoordinates.containsKey(locationId)) {
-      return testCoordinates[locationId]!;
+  String _buildYandexWidgetUrl(List<Location> locations, {int? zoom}) {
+    final avgLat =
+        locations.fold<double>(0, (sum, item) => sum + (item.latitude ?? 0)) /
+            locations.length;
+    final avgLng =
+        locations.fold<double>(0, (sum, item) => sum + (item.longitude ?? 0)) /
+            locations.length;
+    final markers = locations.take(30).map((location) {
+      final isSelected = widget.selected?.id == location.id;
+      final marker = isSelected ? 'pm2rdm' : 'pm2gnm';
+      return '${location.longitude!.toStringAsFixed(6)},${location.latitude!.toStringAsFixed(6)},$marker';
+    }).join('~');
+
+    final params = <String, String>{
+      'lang': 'ru_RU',
+      'l': 'map',
+      'll': '${avgLng.toStringAsFixed(6)},${avgLat.toStringAsFixed(6)}',
+      'z': '${zoom ?? (locations.length > 1 ? 10 : 14)}',
+    };
+    if (markers.isNotEmpty) {
+      params['pt'] = markers;
     }
 
-    return {
-      'lat': 45.021233,
-      'lng': 39.101607,
-    };
+    return Uri.https('yandex.ru', '/map-widget/v1/', params).toString();
   }
 
-  double _calculateDistance(double lat1, double lon1, double lat2, double lon2) {
-    const double earthRadius = 6371; // km
-    final dLat = _toRadians(lat2 - lat1);
-    final dLon = _toRadians(lon2 - lon1);
-    final a = math.sin(dLat / 2) * math.sin(dLat / 2) +
-        math.cos(_toRadians(lat1)) * math.cos(_toRadians(lat2)) *
-        math.sin(dLon / 2) * math.sin(dLon / 2);
-    final c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
-    return earthRadius * c;
+  Future<void> _openLocationInYandex(Location location) async {
+    if (location.latitude == null || location.longitude == null) return;
+    final url = Uri.parse(
+        'https://yandex.ru/maps/?ll=${location.longitude},${location.latitude}&pt=${location.longitude},${location.latitude}&z=16&l=map');
+    await launchUrl(url, mode: LaunchMode.externalApplication);
   }
 
-  double _toRadians(double degrees) {
-    return degrees * (math.pi / 180);
+  void _fitBounds(YandexMapController controller, List<Location> locations) {
+    double minLat = locations.first.latitude!;
+    double maxLat = locations.first.latitude!;
+    double minLng = locations.first.longitude!;
+    double maxLng = locations.first.longitude!;
+
+    for (final l in locations) {
+      if (l.latitude! < minLat) minLat = l.latitude!;
+      if (l.latitude! > maxLat) maxLat = l.latitude!;
+      if (l.longitude! < minLng) minLng = l.longitude!;
+      if (l.longitude! > maxLng) maxLng = l.longitude!;
+    }
+
+    final padLat = (maxLat - minLat) * 0.15;
+    final padLng = (maxLng - minLng) * 0.15;
+
+    controller.moveCamera(
+      CameraUpdate.newGeometry(
+        Geometry.fromBoundingBox(BoundingBox(
+          southWest:
+              Point(latitude: minLat - padLat, longitude: minLng - padLng),
+          northEast:
+              Point(latitude: maxLat + padLat, longitude: maxLng + padLng),
+        )),
+      ),
+      animation:
+          const MapAnimation(type: MapAnimationType.smooth, duration: 0.5),
+    );
   }
 }
 
@@ -1239,7 +1574,8 @@ class _EmployeeStep extends StatelessWidget {
                       ),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.check, color: Colors.white, size: 18),
+                    child:
+                        const Icon(Icons.check, color: Colors.white, size: 18),
                   ),
               ],
             ),
@@ -1310,7 +1646,8 @@ class _EmployeeOption extends StatelessWidget {
                     onTap: () {
                       Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => EmployeeReviewsScreen(employee: employee),
+                          builder: (_) =>
+                              EmployeeReviewsScreen(employee: employee),
                         ),
                       );
                     },
@@ -1565,8 +1902,7 @@ class _ServiceOption extends StatelessWidget {
                     ),
                     shape: BoxShape.circle,
                   ),
-                  child:
-                      const Icon(Icons.check, color: Colors.white, size: 14),
+                  child: const Icon(Icons.check, color: Colors.white, size: 14),
                 ),
             ],
           ),
@@ -1750,7 +2086,7 @@ class _TimeSlots extends StatelessWidget {
       children: AppConstants.timeSlots.map((time) {
         final isSelected = selectedTime == time;
         final isOccupied = occupiedTimeSlots.contains(time);
-        
+
         return GestureDetector(
           onTap: isOccupied ? null : () => onChanged(time),
           child: AnimatedContainer(
@@ -1762,10 +2098,10 @@ class _TimeSlots extends StatelessWidget {
                       colors: [Color(0xFF00E5FF), Color(0xFF0099CC)],
                     )
                   : null,
-              color: isOccupied 
+              color: isOccupied
                   ? AppColors.error.withOpacity(0.15)
-                  : isSelected 
-                      ? null 
+                  : isSelected
+                      ? null
                       : AppColors.card,
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
@@ -1853,7 +2189,7 @@ class _BoxStep extends StatelessWidget {
   Widget build(BuildContext context) {
     final endTime = _calculateEndTime(selectedTime, serviceDuration);
     final availableIds = availableBoxes.map((b) => b.id).toSet();
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1871,7 +2207,8 @@ class _BoxStep extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     'Время: $selectedTime - $endTime',
-                    style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+                    style: const TextStyle(
+                        fontSize: 13, color: AppColors.textSecondary),
                   ),
                 ],
               ),
@@ -2048,9 +2385,8 @@ class _BoxStep extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w700,
-                          color: isSelected
-                              ? Colors.white
-                              : AppColors.textPrimary,
+                          color:
+                              isSelected ? Colors.white : AppColors.textPrimary,
                         ),
                       ),
                       const SizedBox(height: 4),

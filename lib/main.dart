@@ -68,6 +68,12 @@ class CarWashApp extends StatelessWidget {
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
 
+  /// Переключает на указанный таб из любого места в дереве виджетов.
+  static void switchTab(BuildContext context, int index) {
+    final state = context.findAncestorStateOfType<_MainScreenState>();
+    state?._switchTo(index);
+  }
+
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
@@ -77,6 +83,12 @@ class _MainScreenState extends State<MainScreen>
   int _currentIndex = 0;
   late final List<Widget> _screens;
   late AnimationController _animController;
+
+  void _switchTo(int index) {
+    if (index != _currentIndex) {
+      setState(() => _currentIndex = index);
+    }
+  }
 
   @override
   void initState() {
